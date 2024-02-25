@@ -1,16 +1,17 @@
 {
-    "name": "GitLab",
-    "version": "1.0",
-    "slug": "gitlab",
-    "description": "This addon runs GitLab CE on Home Assistant.",
-    "arch": ["aarch64", "amd64", "armhf", "i386"],
-    "startup": "application",
-    "boot": "auto",
-    "ports": {
-      "80/tcp": 8080,
-      "443/tcp": 8443
-    },
-    "options": {},
-    "schema": {}
-  }
-  
+  "name": "GitLab",
+  "version": "1.0",
+  "slug": "gitlab",
+  "description": "This addon runs GitLab CE on Home Assistant.",
+  "arch": ["aarch64", "amd64", "armhf", "i386"],
+  "startup": "application",
+  "boot": "auto",
+  "ports": {
+    "80/tcp": 8080
+  },
+  "ingress": true,
+  "ingress_port": 80,
+  "ingress_entry": "/",
+  "options": {},
+  "schema": {}
+}

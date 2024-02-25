@@ -1,11 +1,12 @@
 FROM gitlab/gitlab-ce:latest
-LABEL maintainer="Your Name <your-email@example.com>"
+LABEL maintainer="your-email@example.com"
 
-# Use this section to install dependencies or run any custom commands
-# RUN apt-get update && apt-get install -y your-dependencies-here
+# Set GitLab to be aware it's behind a proxy
+ENV GITLAB_OMNIBUS_CONFIG="external_url 'https://your-home-assistant-domain.com/'; gitlab_rails['trusted_proxies'] = ['your-proxy-IP']; nginx['listen_port'] = 80; nginx['listen_https'] = false;"
 
-# Expose ports (GitLab HTTP and HTTPS)
-EXPOSE 80 443
+# Start script (if you need to customize the entrypoint, otherwise optional)
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Initialize script (customize if needed)
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["gitlab-ctl", "reconfigure"]
