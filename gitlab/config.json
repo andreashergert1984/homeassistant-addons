@@ -7,7 +7,7 @@
   "startup": "application",
   "boot": "auto",
   "ports": {
-    "80/tcp": 8080
+    "80/tcp": 8081
   },
   "ingress": true,
   "ingress_port": 80,
