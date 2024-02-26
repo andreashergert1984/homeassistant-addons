@@ -1,12 +1,16 @@
 #!/bin/bash
-set -e
 
-# Perform any pre-start configuration here
-# For example, dynamically setting external_url based on environment variables
-# echo "external_url '${GITLAB_EXTERNAL_URL}'" >> /etc/gitlab/gitlab.rb
+# Dynamically set the external_url to match the Ingress path
+GITLAB_EXTERNAL_URL="http://$(hostname -i)"
+echo "external_url '${GITLAB_EXTERNAL_URL}'" >> /etc/gitlab/gitlab.rb
 
-# Now reconfigure GitLab to apply our configurations
+# Configure trusted proxies and other settings as needed
+echo "nginx['listen_port'] = 80;" >> /etc/gitlab/gitlab.rb
+echo "nginx['listen_https'] = false;" >> /etc/gitlab/gitlab.rb
+echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.rb
+
+# Reconfigure GitLab to apply changes
 gitlab-ctl reconfigure
 
-# Hand off to the original entrypoint
-exec /opt/gitlab/bin/gitlab-ctl "$@"
+# Execute the Docker CMD
+exec "$@"
