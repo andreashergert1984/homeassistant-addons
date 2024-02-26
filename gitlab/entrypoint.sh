@@ -2,6 +2,8 @@
 
 # Dynamically set the external_url to match the Ingress path
 GITLAB_EXTERNAL_URL="http://$(hostname -i)"
+echo $GITLAB_EXTERNAL_URL
+echo "starting current version"
 echo "external_url '${GITLAB_EXTERNAL_URL}'" >> /etc/gitlab/gitlab.rb
 
 # Configure trusted proxies and other settings as needed
