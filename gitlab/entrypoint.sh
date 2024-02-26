@@ -14,5 +14,6 @@ echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.r
 # Reconfigure GitLab to apply changes
 #gitlab-ctl reconfigure
 
+/assets/wrapper
 # Execute the Docker CMD
-exec "$@"
+#exec "$@"
