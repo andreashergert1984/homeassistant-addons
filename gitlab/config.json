@@ -13,5 +13,10 @@
   "ingress_port": 80,
   "ingress_entry": "/",
   "options": {},
-  "schema": {}
+  "schema": {},
+  "map": [
+    "config:rw",
+    "media:rw",
+    "backup:rw"
+  ]
 }
