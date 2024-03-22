@@ -17,7 +17,7 @@ do
     folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
     echo "${folder}"
     rm -rf "${p}"
-    ln -s "/data/gitlab/${p}" "${p}"
+    ln -s "/data/gitlab/${folder}" "${p}"
 done < /data/gitlab/list.txt
 
 FILE=/config/gitlab/gitlab.rb
