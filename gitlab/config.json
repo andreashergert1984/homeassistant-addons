@@ -15,5 +15,10 @@
   "ingress_entry": "/",
   "options": {},
   "schema": {},
-  "webui":"http://localhost:80"
+  "webui":"http://localhost:80",
+  "map": [
+    "config:rw",
+    "media:rw",
+    "backup:rw"
+  ]
 }
