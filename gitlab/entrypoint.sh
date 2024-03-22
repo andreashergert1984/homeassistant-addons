@@ -15,11 +15,11 @@ echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gi
 mkdir -p /config/gitlab
 mkdir -p /data/gitlab
 
-rm -f /etc/gitlab
+rm -rf /etc/gitlab
 ln -s /config/gitlab /etc/gitlab
 
-rm -f /var/opt/gitlab
-ln -s /var/opt/gitlab /data/gitlab
+rm -rf /var/opt/gitlab
+ln -s /data/gitlab /var/opt/gitlab
 
 # Reconfigure GitLab to apply changes
 #gitlab-ctl reconfigure
