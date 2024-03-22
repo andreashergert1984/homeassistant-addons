@@ -10,6 +10,9 @@ echo "external_url '${GITLAB_EXTERNAL_URL}'" >> /etc/gitlab/gitlab.rb
 echo "nginx['listen_port'] = 80;" >> /etc/gitlab/gitlab.rb
 echo "nginx['listen_https'] = false;" >> /etc/gitlab/gitlab.rb
 echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.rb
+echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gitlab/gitlab.rb
+
+
 
 # Reconfigure GitLab to apply changes
 #gitlab-ctl reconfigure
