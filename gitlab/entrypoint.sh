@@ -6,6 +6,8 @@ echo $GITLAB_EXTERNAL_URL
 echo "starting current version"
 
 mkdir -p /config/gitlab
+
+find /var/lib/gitlab -maxdepth 1 -type d > /data/list.txt
 FILE=/config/gitlab/gitlab.rb
 if [ -f "$FILE" ]; then
     echo "$FILE exists."

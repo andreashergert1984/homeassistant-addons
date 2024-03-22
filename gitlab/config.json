@@ -13,6 +13,7 @@
   "ingress": true,
   "ingress_port": 80,
   "ingress_entry": "/",
+  "backup": "hot",
   "options": {},
   "schema": {},
   "map": [
@@ -21,4 +22,5 @@
     "media:rw",
     "backup:rw"
   ]
+  
 }
