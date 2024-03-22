@@ -8,7 +8,6 @@ echo "starting current version"
 mkdir -p /config/gitlab
 mkdir -p /data/gitlab
 
-
 find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
 
 while read p
@@ -17,6 +16,7 @@ do
     folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
     echo "${folder}"
     rm -rf "${p}"
+    mkdir -p "/data/gitlab/${folder}"
     ln -s "/data/gitlab/${folder}" "${p}"
 done < /data/gitlab/list.txt
 
