@@ -20,3 +20,4 @@ echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gi
 /assets/wrapper
 # Execute the Docker CMD
 #exec "$@"
+    
