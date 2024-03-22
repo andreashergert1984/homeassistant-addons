@@ -15,7 +15,7 @@ echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-exporter" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-kas" >> /data/gitlab/list.txt
-echo "/var/opt/gitlab/gitlab-rails" >> /data/gitlab/list.txt
+#echo "/var/opt/gitlab/gitlab-rails" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-shell" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-workhorse" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
