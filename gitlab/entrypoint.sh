@@ -10,14 +10,15 @@ mkdir -p /data/gitlab
 
 
 find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
-for p in (/data/gitlab/list.txt)
+
+while read p
 do
     echo "${p}"
     folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
     echo "${folder}"
     rm -rf "${p}"
     ln -s "/data/gitlab/${p}" "${p}"
-done
+done < /data/gitlab/list.txt
 
 FILE=/config/gitlab/gitlab.rb
 if [ -f "$FILE" ]; then
