@@ -12,7 +12,14 @@ echo "nginx['listen_https'] = false;" >> /etc/gitlab/gitlab.rb
 echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.rb
 echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gitlab/gitlab.rb
 
+mkdir -p /config/gitlab
+mkdir -p /data/gitlab
 
+rm -f /etc/gitlab
+ln -s /config/gitlab /etc/gitlab
+
+rm -f /var/opt/gitlab
+ln -s /var/opt/gitlab /data/gitlab
 
 # Reconfigure GitLab to apply changes
 #gitlab-ctl reconfigure
@@ -20,4 +27,3 @@ echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gi
 /assets/wrapper
 # Execute the Docker CMD
 #exec "$@"
-    
