@@ -15,6 +15,9 @@ echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gi
 mkdir -p /config/gitlab
 mkdir -p /data/gitlab
 
+lsof +D /etc/gitlab
+lsof +D /var/opt/gitlab
+
 rm -rf /etc/gitlab
 ln -s /config/gitlab /etc/gitlab
 
