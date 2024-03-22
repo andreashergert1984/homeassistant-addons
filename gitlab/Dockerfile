@@ -10,5 +10,7 @@ RUN cp /opt/gitlab/etc/gitlab.rb.template /etc/gitlab/gitlab.rb
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+
+
 ENTRYPOINT ["entrypoint.sh"]
 #CMD ["gitlab-ctl", "reconfigure"]

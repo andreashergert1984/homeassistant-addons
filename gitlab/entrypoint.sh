@@ -22,7 +22,7 @@ else
     echo "nginx['listen_https'] = false;" >> /etc/gitlab/gitlab.rb
     echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.rb
     echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gitlab/gitlab.rb
-    echo 'git_data_dirs({ "default" => { "path" => "/data/gitlab/git-data" } })' >> /etc/gitlab/gitlab.rb
+#    echo 'git_data_dirs({ "default" => { "path" => "/data/gitlab/git-data" } })' >> /etc/gitlab/gitlab.rb
 
 fi
 

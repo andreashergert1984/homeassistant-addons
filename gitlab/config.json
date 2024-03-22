@@ -17,6 +17,7 @@
   "schema": {},
   "map": [
     "config:rw",
+    "data:rw",
     "media:rw",
     "backup:rw"
   ]
