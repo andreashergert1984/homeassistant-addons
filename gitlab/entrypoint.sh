@@ -9,6 +9,17 @@ mkdir -p /config/gitlab
 mkdir -p /data/gitlab
 
 find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
+echo "/var/opt/gitlab/backups" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/git-data" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-exporter" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-kas" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-rails" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-shell" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-workhorse" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
 
 while read p
 do
