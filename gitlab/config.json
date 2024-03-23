@@ -14,6 +14,7 @@
   "ingress_port": 80,
   "ingress_entry": "/",
   "backup": "hot",
+  "backup_pre": "cp -R /etc/gitlab/* /data/etc/"
   "options": {},
   "schema": {},
   "map": [
