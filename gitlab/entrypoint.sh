@@ -9,7 +9,7 @@ mkdir -p /config/gitlab
 mkdir -p /data/gitlab
 
 find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
-echo "/var/opt/gitlab/backups" >> /data/gitlab/list.txt
+#echo "/var/opt/gitlab/backups" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/git-data" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
 #echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
@@ -48,8 +48,11 @@ else
     echo "gitlab_rails['trusted_proxies'] = ['172.30.32.2']" >> /etc/gitlab/gitlab.rb
     echo "gitlab_rails['initial_root_password'] = '<my_strong_password>'" >> /etc/gitlab/gitlab.rb
 #    echo 'git_data_dirs({ "default" => { "path" => "/data/gitlab/git-data" } })' >> /etc/gitlab/gitlab.rb
-
 fi
+
+rm -rf /var/opt/gitlab/backups
+mkdir -p /backup/gitlab/
+ln -s /backup/gitlab/ /var/opt/gitlab/backups
 
 rm /etc/gitlab/gitlab.rb
 
