@@ -1,6 +1,6 @@
 ---
 name: GitLab
-version: 16.10.0-ce.0-4
+version: 16.10.0-ce.0-5
 slug: gitlab
 description: This addon runs GitLab CE on Home Assistant.
 arch:
@@ -20,7 +20,7 @@ backup_pre: cp -R /etc/gitlab/* /data/etc/
 options: {}
 schema: {}
 hassio_api: true
-backup: hot
+backup: cold
 map:
   - backup:rw
   - config:rw
