@@ -10,28 +10,21 @@ mkdir -p /data/gitlab
 mkdir -p /data/etc
 
 
-find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
-#echo "/var/opt/gitlab/backups" >> /data/gitlab/list.txt
-echo "/var/opt/gitlab/git-data" >> /data/gitlab/list.txt
-echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
+#find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
+#echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
 #echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-exporter" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-kas" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-rails" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-shell" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-workhorse" >> /data/gitlab/list.txt
-echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
-echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
+#echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
+#echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
 
-while read p
-do
-    echo "${p}"
-    folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
-    echo "${folder}"
-    rm -rf "${p}"
-    mkdir -p "/data/gitlab/${folder}"
-    ln -s "/data/gitlab/${folder}" "${p}"
-done < /data/gitlab/list.txt
+#while read p
+#do
+#    echo "${p}"
+#    folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
+#    echo "${folder}"
+#    rm -rf "${p}"
+#    mkdir -p "/data/gitlab/${folder}"
+#    ln -s "/data/gitlab/${folder}" "${p}"
+#done < /data/gitlab/list.txt
 
 FILE=/config/gitlab/gitlab.rb
 if [ -f "$FILE" ]; then
@@ -52,16 +45,16 @@ else
 #    echo 'git_data_dirs({ "default" => { "path" => "/data/gitlab/git-data" } })' >> /etc/gitlab/gitlab.rb
 fi
 
-FILE=/etc/gitlab/gitlab-secrets.json
-if [ -f "$FILE" ]; then
-    echo "$FILE exists."
-else
-    cp -Rv /data/etc/* /etc/gitlab/
-fi
+# FILE=/etc/gitlab/gitlab-secrets.json
+# if [ -f "$FILE" ]; then
+#     echo "$FILE exists."
+# else
+#     cp -Rv /data/etc/* /etc/gitlab/
+# fi
 
 rm -rf /var/opt/gitlab/backups
-mkdir -p /backup/gitlab/
-ln -s /backup/gitlab/ /var/opt/gitlab/backups
+mkdir -p /data/gitlab/
+ln -s /data/gitlab/ /var/opt/gitlab/backups
 
 rm /etc/gitlab/gitlab.rb
 
@@ -72,9 +65,6 @@ ln -s /config/gitlab/gitlab.rb /etc/gitlab/gitlab.rb
 
 # Reconfigure GitLab to apply changes
 #gitlab-ctl reconfigure
-
-
-sleep 300 && cp -R /etc/gitlab/* /data/etc/ &
 
 /assets/wrapper
 # Execute the Docker CMD
