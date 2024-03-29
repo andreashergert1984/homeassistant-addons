@@ -74,5 +74,6 @@ ln -s /config/gitlab/gitlab.rb /etc/gitlab/gitlab.rb
 #gitlab-ctl reconfigure
 
 /assets/wrapper
+cp -R /etc/gitlab/* /data/etc/
 # Execute the Docker CMD
 #exec "$@"
