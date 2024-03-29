@@ -13,6 +13,7 @@ mkdir -p /data/etc
 
 find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/git-data" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
 echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
