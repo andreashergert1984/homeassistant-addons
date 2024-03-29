@@ -17,6 +17,7 @@ ingress: true
 ingress_port: 80
 ingress_entry: "/"
 backup_pre: /opt/gitlab/bin/gitlab-backup create
+backup_post: rm /data/gitlab/*.gz
 options: {}
 schema: {}
 hassio_api: true
