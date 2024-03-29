@@ -1,6 +1,6 @@
 {
   "name": "GitLab",
-  "version": "16.10.0-ce.0-1",
+  "version": "16.10.0-ce.0-2",
   "slug": "gitlab",
   "description": "This addon runs GitLab CE on Home Assistant.",
   "arch": ["aarch64", "amd64", "armhf", "i386"],
