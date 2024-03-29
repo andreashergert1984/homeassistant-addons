@@ -24,4 +24,4 @@ backup: hot
 map:
   - backup:rw
   - config:rw
-  
+  - media:rw

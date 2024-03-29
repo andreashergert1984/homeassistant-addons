@@ -7,24 +7,25 @@ echo "starting current version"
 
 mkdir -p /config/gitlab
 mkdir -p /data/gitlab
+mkdir -p /media/gitlab
 mkdir -p /data/etc
 
 
-#find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
-#echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
+find /var/opt/gitlab -maxdepth 1 -type d | tail -n +2 > /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitaly" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/gitlab-ci" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/logrotate" >> /data/gitlab/list.txt
+echo "/var/opt/gitlab/postgres-exporter" >> /data/gitlab/list.txt
 
-#while read p
-#do
-#    echo "${p}"
-#    folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
-#    echo "${folder}"
-#    rm -rf "${p}"
-#    mkdir -p "/data/gitlab/${folder}"
-#    ln -s "/data/gitlab/${folder}" "${p}"
-#done < /data/gitlab/list.txt
+while read p
+do
+    echo "${p}"
+    folder=`echo "${p}" | rev | cut -d'/' -f1 | rev`
+    echo "${folder}"
+    rm -rf "${p}"
+    mkdir -p "/media/gitlab/${folder}"
+    ln -s "/media/gitlab/${folder}" "${p}"
+done < /data/gitlab/list.txt
 
 FILE=/config/gitlab/gitlab.rb
 if [ -f "$FILE" ]; then
