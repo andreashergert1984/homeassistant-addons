@@ -1,4 +1,4 @@
-FROM gitlab/gitlab-ce:16.10.3-ce.0
+FROM gitlab/gitlab-ce:17.0.2-ce.0
 #LABEL maintainer="your-email@example.com"
 # Set GitLab to be aware it's behind a proxy
 #ENV GITLAB_OMNIBUS_CONFIG="external_url 'https://your-home-assistant-domain.com/'; gitlab_rails['trusted_proxies'] = ['your-proxy-IP']; nginx['listen_port'] = 80; nginx['listen_https'] = false;"
