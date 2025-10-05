@@ -6,7 +6,10 @@
   "arch": ["amd64", "armhf", "armv7", "aarch64"],
   "startup": "services",
   "boot": "auto",
-  "ports": ["8069:8069", "5432:5432"],
+  "ports": {
+    "8069/tcp": 8069,
+    "5432/tcp": 5432
+  },
   "options": {},
   "schema": {},
   "environment": {
