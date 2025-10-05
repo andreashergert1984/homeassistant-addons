@@ -6,10 +6,7 @@
   "arch": ["amd64", "armhf", "armv7", "aarch64"],
   "startup": "services",
   "boot": "auto",
-  "ports": [
-    "8069:8069",
-    "5432:5432"
-  ],
+  "ports": ["8069:8069", "5432:5432"],
   "options": {},
   "schema": {},
   "environment": {
@@ -19,10 +16,6 @@
     "ODOO_ADMIN_PASSWORD": "admin",
     "ODOO_EXTERNAL_URL": "http://YOUR_HA_HOST:8069"
   },
-
-  /* ──────────────────────────────────────── */
-  /*  Persistent‑storage configuration   */
-  /* ──────────────────────────────────────── */
   "map_config": true,
   "map_data": true
 }
