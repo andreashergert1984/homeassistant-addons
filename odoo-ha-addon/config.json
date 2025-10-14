@@ -2,13 +2,12 @@
 "name": "Odoo",
 "version": "0.1.0",
 "slug": "odoo",
-"description": "Odoo 19 as a Home Assistant add-on (Debian-based). Requires an external PostgreSQL database.",
+"description": "Odoo 19 as a Home Assistant add-on (Debian-based). Requires no external PostgreSQL database.",
 "startup": "application",
 "boot": "auto",
 "host_network": false,
-"ports": {
-"8069/tcp": 8069
-},
+  "ports": ["8069:8069", "5432:5432"],
+
 "map": [
 "data"
 ],
