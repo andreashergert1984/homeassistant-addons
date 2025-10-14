@@ -16,7 +16,7 @@ RUN apt-get update \
         git build-essential \
         libxml2-dev libxslt1-dev zlib1g-dev libsasl2-dev libldap2-dev libpq-dev libjpeg-dev libssl-dev \
         libffi-dev node-less wget curl supervisor gettext \
-        postgresql-13 postgresql-client-13 \
+        postgresql-13 postgresql-client-13 wkhtmltopdf \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
