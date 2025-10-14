@@ -1,4 +1,4 @@
-# Odoo 12 Add-on Documentation
+# Odoo Add-on Documentation
 
 ## Workflow
 

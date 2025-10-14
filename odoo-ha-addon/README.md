@@ -1,4 +1,4 @@
-# Odoo Home Assistant Add-on (Debian-based)
+# Odoo Home Assistant Add-on
 
 
 This add-on runs Odoo 19 inside a Home Assistant Supervisor add-on container.
