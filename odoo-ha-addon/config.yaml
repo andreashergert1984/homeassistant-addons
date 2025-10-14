@@ -12,8 +12,8 @@ arch:
 startup: services
 boot: auto
 ports:
-- 8069:8069
-- 5432:5432
+ 8069:8069
+ 5432:5432
 options: {}
 schema: {}
 environment:
