@@ -1,0 +1,26 @@
+---
+name: Odoo 19 (Home‑Assistant)
+version: '1.0'
+slug: odoo_homeassistant
+description: Runs Odoo 16 together with an embedded PostgreSQL instance. All data
+  is persisted in the HA-managed volume.
+arch:
+- amd64
+- armhf
+- armv7
+- aarch64
+startup: services
+boot: auto
+ports:
+- 8069:8069
+- 5432:5432
+options: {}
+schema: {}
+environment:
+  POSTGRES_USER: odoo
+  POSTGRES_PASSWORD: odoo
+  POSTGRES_DB: odoo
+  ODOO_ADMIN_PASSWORD: admin
+  ODOO_EXTERNAL_URL: http://YOUR_HA_HOST:8069
+map_config: true
+map_data: true
