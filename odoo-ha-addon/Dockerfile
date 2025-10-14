@@ -1,10 +1,12 @@
 # ---- 1️⃣ Base Odoo image ----
-FROM odoo:16.0
+FROM odoo:latest
 
 # ---- 2️⃣ Install PostgreSQL + Supervisor ----
+USER root
 RUN apt-get update && \
     apt-get install -y postgresql postgresql-client supervisor && \
     rm -rf /var/lib/apt/lists/*
+USER odoo   # restore the Odoo user for the rest of the image
 
 # ---- 3️⃣ Make /data the PostgreSQL data directory ----
 ENV PGDATA /data/postgres
