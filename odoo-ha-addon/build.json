@@ -1,0 +1,10 @@
+{
+"build_from": {
+"amd64": "homeassistant/amd64-base-debian:latest",
+"aarch64": "homeassistant/aarch64-base-debian:latest",
+"armv7": "homeassistant/armv7-base-debian:latest",
+"armhf": "homeassistant/armhf-base-debian:latest"
+},
+"squash": false,
+"args": {}
+}

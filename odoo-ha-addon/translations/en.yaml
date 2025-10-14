@@ -1,0 +1,19 @@
+configuration:
+  db_user:
+    name: Database user
+    description: Username for PostgreSQL
+  db_password:
+    name: Database password
+    description: Password for PostgreSQL user
+  db_name:
+    name: Database name
+    description: Name of Odoo database
+  odoo_admin_password:
+    name: Odoo admin password
+    description: Master/admin password for Odoo
+  addons_path:
+    name: Addons path
+    description: Custom modules path inside container
+
+network:
+  "8069/tcp": Odoo web interface port

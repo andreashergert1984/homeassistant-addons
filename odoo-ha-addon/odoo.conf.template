@@ -1,0 +1,3 @@
+[options]
+# This is a template. The run.sh renders the final /etc/odoo/odoo.conf
+# See run.sh for templating logic.

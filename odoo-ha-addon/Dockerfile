@@ -1,36 +1,67 @@
-# ---- 1️⃣ Base Odoo image ----
-FROM odoo:latest
+FROM python:3.11-slim-bullseye
 
-# ---- 2️⃣ Install PostgreSQL + Supervisor ----
+ENV LANG=C.UTF-8
+ENV ODOO_VERSION=19.0
+ENV ODOO_HOME=/opt/odoo
+ENV PYTHONUNBUFFERED=1
+ENV POSTGRES_USER=odoo
+ENV POSTGRES_PASSWORD=odoo
+ENV POSTGRES_DB=odoo
+ENV POSTGRES_DATA=/data/postgres
+ENV PATH=$ODOO_HOME/venv/bin:$PATH
+
+# Install system dependencies + PostgreSQL + supervisor
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git build-essential \
+        libxml2-dev libxslt1-dev zlib1g-dev libsasl2-dev libldap2-dev libpq-dev libjpeg-dev libssl-dev \
+        libffi-dev node-less wget curl supervisor gettext \
+        postgresql-13 postgresql-client-13 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create Odoo user and persistent folders
+RUN useradd -m -d ${ODOO_HOME} -U -r -s /bin/bash odoo || true
+RUN mkdir -p ${ODOO_HOME} /data/filestore /data/addons /etc/odoo ${POSTGRES_DATA} \
+    && chown -R odoo:odoo /data ${POSTGRES_DATA} /etc/odoo ${ODOO_HOME}
+
+# Clone Odoo source
+WORKDIR /opt
+RUN rm -rf ${ODOO_HOME} \
+    && git clone --depth 1 --branch ${ODOO_VERSION} https://github.com/odoo/odoo.git ${ODOO_HOME} \
+    && chown -R odoo:odoo ${ODOO_HOME}
+
+
+RUN mkdir -p /var/run/postgresql && chown -R odoo:odoo /var/run/postgresql
+
+# Switch to Odoo user for Python setup
+USER odoo
+WORKDIR ${ODOO_HOME}
+
+# Create Python virtualenv and install requirements
+RUN python3 -m venv venv
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install -r ${ODOO_HOME}/requirements.txt || true
+RUN pip install phonenumbers
+
+# Switch back to root
 USER root
-RUN apt-get update && \
-    apt-get install -y postgresql postgresql-client supervisor && \
-    rm -rf /var/lib/apt/lists/*
-USER odoo   # restore the Odoo user for the rest of the image
 
-# ---- 3️⃣ Make /data the PostgreSQL data directory ----
-ENV PGDATA /data/postgres
-RUN mkdir -p "$PGDATA" && \
-    chown -R postgres:postgres "$PGDATA"
+# Copy run script and Odoo config template
+COPY run.sh /usr/local/bin/run.sh
+COPY odoo.conf.template /etc/odoo/odoo.conf.template
+RUN chmod +x /usr/local/bin/run.sh
 
-# ---- 4️⃣ Initialise the database (user+db) ----
-RUN service postgresql start && \
-    sudo -u postgres psql -c "CREATE USER ${POSTGRES_USER:-odoo} WITH PASSWORD '${POSTGRES_PASSWORD:-odoo}';" && \
-    sudo -u postgres psql -c "CREATE DATABASE ${POSTGRES_DB:-odoo} OWNER ${POSTGRES_USER:-odoo};" && \
-    service postgresql stop
-
-# ---- 5️⃣ Point Odoo to the local Postgres instance ----
-RUN sed -i "s/^; db_host =.*/db_host = localhost/" /etc/odoo/odoo.conf && \
-    sed -i "s/^; db_user =.*/db_user = ${POSTGRES_USER:-odoo}/" /etc/odoo/odoo.conf && \
-    sed -i "s/^; db_password =.*/db_password = ${POSTGRES_PASSWORD:-odoo}/" /etc/odoo/odoo.conf && \
-    sed -i "s/^; db_name =.*/db_name = ${POSTGRES_DB:-odoo}/" /etc/odoo/odoo.conf && \
-    sed -i "s/^; db_host = 127.0.0.1/db_host = localhost/" /etc/odoo/odoo.conf && \
-    sed -i "s/^; db_port =.*/db_port = 5432/" /etc/odoo/odoo.conf
-
-# ---- 6️⃣ Add Supervisor config and wrapper script ----
+# Copy supervisord config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY run.sh /run.sh
-RUN chmod +x /run.sh
+COPY start_postgres.sh /usr/local/bin/start_postgres.sh
+RUN chmod +x /usr/local/bin/start_postgres.sh
 
-# ---- 7️⃣ Start everything ----
-CMD ["/run.sh"]
+# Expose Odoo port
+EXPOSE 8069
+
+# Persistent volume for Odoo and PostgreSQL data
+VOLUME ["/data"]
+
+# Start supervisord
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
