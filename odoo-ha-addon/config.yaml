@@ -1,6 +1,6 @@
 ---
-name: Odoo 19 (Home‑Assistant)
-version: '1.1'
+name: Odoo 11 (Home‑Assistant)
+version: '1.2'
 slug: odoo_homeassistant
 description: Runs Odoo together with an embedded PostgreSQL instance. All data
   is persisted in the HA-managed volume.
