@@ -1,7 +1,7 @@
 FROM python:3.11-slim-bullseye
 
 ENV LANG=C.UTF-8
-ENV ODOO_VERSION=11.0
+ENV ODOO_VERSION=18.0
 ENV ODOO_HOME=/opt/odoo
 ENV PYTHONUNBUFFERED=1
 ENV POSTGRES_USER=odoo
@@ -41,8 +41,27 @@ WORKDIR ${ODOO_HOME}
 # Create Python virtualenv and install requirements
 RUN python3 -m venv venv
 RUN pip install --upgrade pip setuptools wheel
+RUN pip install wheel
 RUN pip install -r ${ODOO_HOME}/requirements.txt || true
 RUN pip install phonenumbers
+# RUN pip install PyPDF2
+# RUN pip install passlib
+# RUN pip install babel
+# RUN pip install werkzeug
+# RUN pip install lxml
+# RUN pip install decorator
+# RUN pip install dateutils
+# RUN pip install PyYAML
+# RUN pip install psycopg2
+# RUN pip install num2words
+# RUN pip install ofxparse
+# RUN pip install XlsxWriter
+# RUN pip install html2text
+# RUN pip install vobject
+# RUN pip install reportlab
+# RUN pip install qrcode
+# RUN pip install pydot
+# RUN pip install lxml_html_clean
 
 # Switch back to root
 USER root

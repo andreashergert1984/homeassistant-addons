@@ -1,5 +1,5 @@
 ---
-name: Odoo 11 (Home‑Assistant)
+name: Odoo 18 (Home‑Assistant)
 version: '1.2'
 slug: odoo_homeassistant
 description: Runs Odoo together with an embedded PostgreSQL instance. All data

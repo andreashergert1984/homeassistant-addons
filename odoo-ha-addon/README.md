@@ -1,7 +1,7 @@
 # Odoo Home Assistant Add-on
 
 
-This add-on runs Odoo 19 inside a Home Assistant Supervisor add-on container.
+This add-on runs Odoo 18 inside a Home Assistant Supervisor add-on container.
 
 
 **Important**: Odoo requires a PostgreSQL database. Configure database connection in the add-on options before starting.
