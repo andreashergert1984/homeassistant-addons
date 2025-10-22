@@ -32,6 +32,6 @@ schema:
 environment:
   # <-- note the {{ … }} templating syntax
   GITLAB_OMNIBUS_CONFIG: |-
-    external_url '{{ options.external_url }}';
+    external_url 'homeassistant.local:18080';
 # You can leave the image field blank and use the Dockerfile below to pull the official image
 # image: gitlab/gitlab-ce:latest
