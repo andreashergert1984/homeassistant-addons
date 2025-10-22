@@ -8,8 +8,8 @@ boot: auto
 
 # Ports – change to whatever you want the external interface to be
 ports:
-  - 18080/tcp:80
-  - 18443/tcp:443
+  - 18080/tcp: 80
+  - 18443/tcp: 443
 
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
