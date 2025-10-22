@@ -2,7 +2,8 @@ name: GitLab CE
 version: 18.3.5          # pick the latest stable release that your host can run
 slug: gitlab
 description: Self‑hosted GitLab Community Edition – perfect for code‑review, CI, and more.
-arch: aarch64,armv7,amd64,386,armhf,armv6
+arch: 
+- amd64
 startup: services          # start automatically
 boot: auto
 
