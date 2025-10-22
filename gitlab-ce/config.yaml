@@ -22,7 +22,7 @@ volumes:
 
 # Options you can edit in the HA UI – this lets you change the public URL.
 options:
-  external_url: "http://<YOUR_HOST_IP>:18080"
+  external_url: "http://homeassistant.local:18080"
 
 # Validation schema for the options block
 schema:
@@ -30,7 +30,8 @@ schema:
 
 # Optional: Override the entrypoint to inject the external_url into the omnibus config
 environment:
-  GITLAB_OMNIBUS_CONFIG: "external_url '${options.external_url}';"
-
+  # <-- note the {{ … }} templating syntax
+  GITLAB_OMNIBUS_CONFIG: |-
+    external_url '{{ options.external_url }}';
 # You can leave the image field blank and use the Dockerfile below to pull the official image
 # image: gitlab/gitlab-ce:latest
