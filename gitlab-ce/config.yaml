@@ -12,6 +12,10 @@ ports:
   8080/tcp: 1280
   8443/tcp: 12443
 
+
+ingress: true
+ingress_port: 80               # the port the container listens on (default for GitLab)
+
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
 # are automatically created when the add‑on is installed.
