@@ -29,8 +29,8 @@ volumes:
 #  external_url: "http://home.assistant.local:18080/"
 
 # Validation schema for the options block
-schema:
-  external_url: str
+# schema:
+#  external_url: str
 
 # Optional: Override the entrypoint to inject the external_url into the omnibus config
 environment:
