@@ -36,7 +36,6 @@ schema:
 environment:
   # <-- note the {{ … }} templating syntax
   GITLAB_OMNIBUS_CONFIG: |-
-    external_url 'https://git.hergert.info/';
     letsencrypt['disable'];
     letsencrypt['enable'] = false;  # Disable Let's Encrypt (handled by HA) 
     letsencrypt['auto_renew'] = false;
@@ -45,6 +44,7 @@ environment:
 #    nginx['real_ip_trusted_addresses'] = [''];  # Trust all IPs from the host
 #    nginx['real_ip_header'] = "X-Forwarded-For";
 #    nginx['real_ip_recursive'] = true;
+#    external_url 'http://git.hergert.info/';
 
 # You can leave the image field blank and use the Dockerfile below to pull the official image
 #image: gitlab/gitlab-ce
