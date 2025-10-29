@@ -13,9 +13,9 @@ ports:
   443/tcp: 12443
 
 
-ingress: true
-ingress_port: 1280               # the port the container listens on (default for GitLab)
-ingress_stream: true
+# ingress: true
+# ingress_port: 1280               # the port the container listens on (default for GitLab)
+# ingress_stream: true
 
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
@@ -48,4 +48,4 @@ environment:
 #    external_url 'http://git.hergert.info/';
 
 # You can leave the image field blank and use the Dockerfile below to pull the official image
-#image: gitlab/gitlab-ce
+# image: gitlab/gitlab-ce
