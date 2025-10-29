@@ -40,7 +40,7 @@ environment:
     letsencrypt['disable'];
     letsencrypt['enable'] = false;  # Disable Let's Encrypt (handled by HA) 
     letsencrypt['auto_renew'] = false;
-
+    GITLAB_ROOT_PASSWORD = "changeme";  # Change this password after first login!
 #    nginx['listen_https'] = false;
 #    nginx['real_ip_trusted_addresses'] = [''];  # Trust all IPs from the host
 #    nginx['real_ip_header'] = "X-Forwarded-For";
