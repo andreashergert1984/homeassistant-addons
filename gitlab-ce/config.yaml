@@ -15,6 +15,7 @@ ports:
 
 ingress: true
 ingress_port: 1280               # the port the container listens on (default for GitLab)
+ingress_stream: true
 
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
