@@ -41,4 +41,4 @@ environment:
 
 
 # You can leave the image field blank and use the Dockerfile below to pull the official image
-# image: gitlab/gitlab-ce:latestsa
+image: gitlab/gitlab-ce:18.3.5-ce.0
