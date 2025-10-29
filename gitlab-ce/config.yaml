@@ -9,8 +9,8 @@ boot: auto
 
 # Ports – change to whatever you want the external interface to be
 ports:
-  8080/tcp: 1280
-  8443/tcp: 12443
+  80/tcp: 1280
+  443/tcp: 12443
 
 
 ingress: true
