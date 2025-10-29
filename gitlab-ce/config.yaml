@@ -14,7 +14,7 @@ ports:
 
 
 ingress: true
-ingress_port: 80               # the port the container listens on (default for GitLab)
+ingress_port: 1280               # the port the container listens on (default for GitLab)
 
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
@@ -25,8 +25,8 @@ volumes:
   - /addons_data/gitlab/etc:/etc/gitlab
 
 # Options you can edit in the HA UI – this lets you change the public URL.
-options:
-  external_url: "http://home.assistant.local:18080/"
+#options:
+#  external_url: "http://home.assistant.local:18080/"
 
 # Validation schema for the options block
 schema:
