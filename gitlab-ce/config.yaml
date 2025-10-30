@@ -28,9 +28,9 @@ map:
   - type: addon_config
     read_only: False
     path: /etc/gitlab 
-#  - type: data
-#    read_only: False
-#    path: /var/opt/gitlab
+  - type: addons
+    read_only: False
+    path: /var/opt/gitlab
 
 
 
