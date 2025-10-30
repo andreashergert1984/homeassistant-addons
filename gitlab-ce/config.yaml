@@ -31,6 +31,8 @@ map:
   - type: data
     read_only: False
     path: /var/opt/gitlab
+  - type: backup
+    read_only: False
 
 
 
