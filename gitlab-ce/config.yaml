@@ -19,18 +19,18 @@ ports:
 # The data that GitLab needs to persist.  
 # These bind‑mounts use the Home‑Assistant data store (/addons_data/<slug>) and
 # are automatically created when the add‑on is installed.
-#volumes:
-#  - /addons_data/gitlab/opt:/var/opt/gitlab
-#  - /addons_data/gitlab/log:/var/log/gitlab
-#  - /addons_data/gitlab/etc:/etc/gitlab
+volumes:
+  - /addons_data/gitlab/opt:/var/opt/gitlab
+  - /addons_data/gitlab/log:/var/log/gitlab
+  - /addons_data/gitlab/etc:/etc/gitlab
 
-map:
-  - type: addon_config
-    read_only: False
-    path: /etc/gitlab 
-  - type: data
-    read_only: False
-    path: /var/opt/gitlab
+#map:
+#  - type: addon_config
+#    read_only: False
+#    path: /etc/gitlab 
+#  - type: data
+#    read_only: False
+#    path: /var/opt/gitlab
 
 
 
