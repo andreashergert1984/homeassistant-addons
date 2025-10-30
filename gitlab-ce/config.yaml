@@ -13,8 +13,8 @@ ports:
   443/tcp: 12443
 
 
-ingress: true
-ingress_port: 12443               # the port the container listens on (default for GitLab)
+# ingress: true
+# ingress_port: 12443               # the port the container listens on (default for GitLab)
 # ingress_stream: true
 
 # The data that GitLab needs to persist.  
