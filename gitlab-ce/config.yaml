@@ -26,10 +26,10 @@ ports:
 
 map:
   - type: addon_config
-    read_only: false
+    read_only: False
     path: /etc/gitlab 
   - type: data
-    read_only: false
+    read_only: falsealse
     path: /var/opt/gitlab
 
 
