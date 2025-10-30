@@ -34,7 +34,8 @@ map:
   - type: backup
     read_only: False
 
-
+backup_pre: gitlab-backup create BACKUP=$(date +"%Y-%m-%d_%H.%M_%N")
+backup_post: mv /var/opt/gitlab/backups/* /backup/
 
 # Options you can edit in the HA UI – this lets you change the public URL.
 #options:
