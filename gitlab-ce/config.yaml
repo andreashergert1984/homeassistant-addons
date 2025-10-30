@@ -30,7 +30,7 @@ map:
     path: /etc/gitlab 
   - type: addons
     read_only: False
-    path: /var/opt/gitlab
+    path: /var/opt
 
 
 
