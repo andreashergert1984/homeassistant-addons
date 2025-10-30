@@ -24,13 +24,13 @@ ports:
 #  - /addons_data/gitlab/log:/var/log/gitlab
 #  - /addons_data/gitlab/etc:/etc/gitlab
 
-#map:
-#  - type: addon_config
-#    read_only: False
-#    path: /etc/gitlab 
-#  - type: data
-#    read_only: falsealse
-#    path: /var/opt/gitlab
+map:
+  - type: addon_config
+    read_only: False
+    path: /etc/gitlab 
+  - type: data
+    read_only: falsealse
+    path: /var/opt/gitlab
 
 
 
