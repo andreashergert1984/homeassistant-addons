@@ -36,7 +36,7 @@ map:
 
 backup_pre: gitlab-backup create BACKUP=$(date +"%Y-%m-%d_%H.%M_%N")
 backup_post: mv /var/opt/gitlab/backups/* /backup/
-
+backup_exclude: *
 # Options you can edit in the HA UI – this lets you change the public URL.
 #options:
 #  external_url: "http://home.assistant.local:18080/"
