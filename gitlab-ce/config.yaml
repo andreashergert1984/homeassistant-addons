@@ -29,7 +29,7 @@ map:
     read_only: False
     path: /etc/gitlab 
   - type: data
-    read_only: falsealse
+    read_only: False
     path: /var/opt/gitlab
 
 
