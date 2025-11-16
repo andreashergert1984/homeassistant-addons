@@ -16,7 +16,7 @@ RUN chmod +x /usr/local/bin/run.sh
 EXPOSE 9000 9001
 
 # Persistent volumes
-VOLUME ["/data", "/config"]
+VOLUME ["/data", "/config", "/media"]
 
 # Start MinIO via our wrapper script
 ENTRYPOINT ["/usr/local/bin/run.sh"]

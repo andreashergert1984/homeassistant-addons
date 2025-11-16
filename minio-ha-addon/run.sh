@@ -41,6 +41,9 @@ else
     MINIO_DATA_DIR="/data/${MINIO_DATA_PATH}"
 fi
 
+# Ensure base directory exists
+mkdir -p /media /data
+
 # Ensure data directory exists
 mkdir -p "$MINIO_DATA_DIR"
 
