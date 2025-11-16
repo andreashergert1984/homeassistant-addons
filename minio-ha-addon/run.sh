@@ -10,7 +10,10 @@ MINIO_DATA_BASE="media"
 MINIO_BROWSER="${MINIO_BROWSER:-on}"
 MINIO_CONSOLE_ADDRESS="${MINIO_CONSOLE_ADDRESS:-:9001}"
 
+
 # Read Home Assistant options if available
+API_PORT=9000
+CONSOLE_PORT=9001
 if [ -f /data/options.json ]; then
     echo "Reading Home Assistant add-on options..."
     if command -v jq &> /dev/null; then
@@ -19,6 +22,8 @@ if [ -f /data/options.json ]; then
         DATA_PATH=$(jq -r '.data_path // "minio"' /data/options.json)
         DATA_BASE=$(jq -r '.data_base // "media"' /data/options.json)
         BROWSER_ENABLED=$(jq -r '.browser_enabled // true' /data/options.json)
+        API_PORT=$(jq -r '.api_port // 9000' /data/options.json)
+        CONSOLE_PORT=$(jq -r '.console_port // 9001' /data/options.json)
         export MINIO_ROOT_USER="$ADMIN_USER"
         export MINIO_ROOT_PASSWORD="$ADMIN_PASSWORD"
         MINIO_DATA_PATH="$DATA_PATH"
@@ -44,11 +49,11 @@ echo "Starting MinIO Server"
 echo "Data directory: $MINIO_DATA_DIR"
 echo "Admin user: $MINIO_ROOT_USER"
 echo "Console enabled: $MINIO_BROWSER"
-echo "API Port: 9000"
-echo "Console Port: 9001"
+echo "API Port: $API_PORT"
+echo "Console Port: $CONSOLE_PORT"
 echo "================================================"
 
 # Start MinIO server
 exec minio server "$MINIO_DATA_DIR" \
-    --address ":9000" \
-    --console-address "$MINIO_CONSOLE_ADDRESS"
+    --address ":$API_PORT" \
+    --console-address ":$CONSOLE_PORT"
