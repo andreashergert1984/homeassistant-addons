@@ -31,6 +31,7 @@ MinIO is a high-performance, S3-compatible object storage system. This add-on ru
 - `data_base` (media|data): Base directory for MinIO data, either `/media` or `/data` (default: `media`)
 - `browser_enabled` (boolean): Enable web console access (default: `true`)
 
+
 ### Example Configuration
 
 ```yaml
@@ -38,13 +39,34 @@ admin_user: minio-admin
 admin_password: MySecurePassword123!
 data_path: minio
 data_base: media
+api_port: 9200
+console_port: 9201
 browser_enabled: true
 ```
 
+### Custom Port Mapping Example
+
+If host ports 9000/9001 are in use, you can map MinIO's internal ports to other host ports:
+
+```bash
+docker run --rm -it \
+	-p 9200:9200 -p 9201:9201 \
+	-e MINIO_ROOT_USER=admin \
+	-e MINIO_ROOT_PASSWORD=minio123 \
+	-v /tmp/minio-data:/media/minio \
+	minio-ha-addon:local
+```
+Set in add-on options:
+```yaml
+api_port: 9200
+console_port: 9201
+```
+
+
 ## Usage
 
-1. **Web Console**: Access at `http://<home-assistant-host>:9001` with your admin credentials
-2. **S3 API**: Connect S3 clients to `http://<home-assistant-host>:9000`
+1. **Web Console**: Access at `http://<host-ip>:<console-port>` with your admin credentials
+2. **S3 API**: Connect S3 clients to `http://<host-ip>:<api-port>`
 3. **Create Buckets**: Use the web console to create buckets for organizing your data
 
 

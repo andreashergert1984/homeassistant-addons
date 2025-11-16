@@ -33,6 +33,7 @@ Selects the base directory for MinIO data storage. Can be either `media` (for `/
 
 For example, setting `data_base: data` and `data_path: minio` stores data at `/data/minio`.
 
+
 ### Option: `browser_enabled`
 
 Enable or disable the MinIO web console.
@@ -40,6 +41,32 @@ Enable or disable the MinIO web console.
 **Default**: `true`
 
 Set to `false` to disable web console access (API-only mode).
+
+### Option: `api_port`
+
+Set the internal API port for MinIO. Default: 9000. If you need to avoid port conflicts, set this to another value and map the container port to a host port using Docker.
+
+### Option: `console_port`
+
+Set the internal Console port for MinIO. Default: 9001. You can also change this and map the container port to a host port.
+
+### Custom Port Mapping Example
+
+If host ports 9000/9001 are in use, run:
+
+```bash
+docker run --rm -it \
+    -p 9200:9200 -p 9201:9201 \
+    -e MINIO_ROOT_USER=admin \
+    -e MINIO_ROOT_PASSWORD=minio123 \
+    -v /tmp/minio-data:/media/minio \
+    minio-ha-addon:local
+```
+Set in add-on options:
+```yaml
+api_port: 9200
+console_port: 9201
+```
 
 ## Ports
 
