@@ -44,6 +44,10 @@ fi
 # Ensure data directory exists
 mkdir -p "$MINIO_DATA_DIR"
 
+# Set MinIO server URL for proper redirects
+export MINIO_SERVER_URL="http://0.0.0.0:$API_PORT"
+export MINIO_BROWSER_REDIRECT_URL="http://0.0.0.0:$CONSOLE_PORT"
+
 echo "================================================"
 echo "Starting MinIO Server"
 echo "Data directory: $MINIO_DATA_DIR"
