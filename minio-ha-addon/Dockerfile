@@ -1,12 +1,9 @@
-# Build stage to get jq
-FROM alpine:latest AS builder
-RUN apk add --no-cache jq
 
-# Final stage
 FROM minio/minio:latest
 
-# Copy jq from builder
-COPY --from=builder /usr/bin/jq /usr/bin/jq
+# Download static jq binary
+ADD https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 /usr/bin/jq
+RUN chmod +x /usr/bin/jq
 
 # Create directories for MinIO data
 RUN mkdir -p /data/minio /config
