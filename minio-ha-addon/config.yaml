@@ -38,6 +38,11 @@ schema:
   api_port: int
   console_port: int
   browser_enabled: bool
-map_config: true
-map_data: true
-map_media: true
+
+map:
+  - type: addon_config
+    read_only: false
+  - type: data
+    read_only: false
+  - type: media
+    read_only: false
