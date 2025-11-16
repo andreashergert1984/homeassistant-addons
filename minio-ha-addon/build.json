@@ -1,0 +1,9 @@
+{
+  "build_from": {
+    "amd64": "minio/minio:latest",
+    "aarch64": "minio/minio:latest",
+    "armv7": "minio/minio:latest"
+  },
+  "squash": false,
+  "args": {}
+}

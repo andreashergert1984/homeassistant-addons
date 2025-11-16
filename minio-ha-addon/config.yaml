@@ -1,0 +1,30 @@
+---
+name: MinIO Object Storage
+version: '1.0.0'
+slug: minio_homeassistant
+description: MinIO high-performance object storage server compatible with Amazon S3
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+ports:
+  9000/tcp: 9000
+  9001/tcp: 9001
+ports_description:
+  9000/tcp: MinIO S3 API
+  9001/tcp: MinIO Web Console
+options:
+  admin_user: admin
+  admin_password: changeme123
+  data_path: minio
+  browser_enabled: true
+schema:
+  admin_user: str
+  admin_password: password
+  data_path: str
+  browser_enabled: bool
+map_config: true
+map_data: true
+map_media: true

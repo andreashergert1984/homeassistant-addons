@@ -1,0 +1,18 @@
+---
+configuration:
+  admin_user:
+    name: Admin Username
+    description: Root username for MinIO administration
+  admin_password:
+    name: Admin Password
+    description: Root password for MinIO (must be at least 8 characters)
+  data_path:
+    name: Data Path
+    description: Subdirectory under /data for MinIO storage
+  browser_enabled:
+    name: Enable Web Console
+    description: Enable MinIO web console interface
+
+network:
+  "9000/tcp": MinIO S3 API endpoint
+  "9001/tcp": MinIO Web Console

@@ -1,0 +1,58 @@
+# MinIO Home Assistant Add-on
+
+High-performance S3-compatible object storage server for Home Assistant.
+
+## About
+
+MinIO is a high-performance, S3-compatible object storage system. This add-on runs MinIO inside Home Assistant Supervisor, allowing you to:
+
+- Store backups and media files
+- Provide S3-compatible storage for applications
+- Manage objects via Web Console or S3 API
+- Use configurable data paths (default: `/media/minio`)
+
+## Installation
+
+1. Copy this folder to your Home Assistant add-ons local repository
+2. Refresh the Add-on Store
+3. Install "MinIO Object Storage"
+4. Configure your admin credentials in the add-on options
+5. Start the add-on
+6. Access the console at `http://<home-assistant-host>:9001`
+
+## Configuration
+
+### Options
+
+- `admin_user` (string, required): MinIO root username (default: `admin`)
+- `admin_password` (password, required): MinIO root password - **change this!**
+- `data_path` (string): Subdirectory under `/data` for MinIO storage (default: `minio`)
+- `browser_enabled` (boolean): Enable web console access (default: `true`)
+
+### Example Configuration
+
+```yaml
+admin_user: minio-admin
+admin_password: MySecurePassword123!
+data_path: minio
+browser_enabled: true
+```
+
+## Usage
+
+1. **Web Console**: Access at `http://<home-assistant-host>:9001` with your admin credentials
+2. **S3 API**: Connect S3 clients to `http://<home-assistant-host>:9000`
+3. **Create Buckets**: Use the web console to create buckets for organizing your data
+
+## Data Storage
+
+By default, MinIO data is stored at `/data/minio` inside the container, which maps to the Home Assistant data volume. You can configure an alternative path using the `data_path` option.
+
+The add-on supports:
+- `map_data: true` - stores in `/data`
+- `map_media: true` - allows access to `/media` for bulk storage
+
+## Support
+
+For issues specific to this Home Assistant add-on, please open an issue in the repository.
+For MinIO documentation, visit: https://min.io/docs/minio/linux/index.html
