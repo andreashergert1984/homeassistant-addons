@@ -16,13 +16,22 @@ MinIO requires passwords to be at least 8 characters long.
 
 **Default**: `changeme123`
 
+
 ### Option: `data_path`
 
-The subdirectory under `/data` where MinIO will store objects and metadata.
+The subdirectory under the selected base directory (`/media` or `/data`) where MinIO will store objects and metadata.
 
 **Default**: `minio`
 
-For example, setting `data_path: minio` stores data at `/data/minio` inside the container.
+For example, setting `data_path: minio` and `data_base: media` stores data at `/media/minio` inside the container.
+
+### Option: `data_base`
+
+Selects the base directory for MinIO data storage. Can be either `media` (for `/media`) or `data` (for `/data`).
+
+**Default**: `media`
+
+For example, setting `data_base: data` and `data_path: minio` stores data at `/data/minio`.
 
 ### Option: `browser_enabled`
 
@@ -37,11 +46,13 @@ Set to `false` to disable web console access (API-only mode).
 - **9000**: MinIO S3 API endpoint
 - **9001**: MinIO Web Console (if enabled)
 
+
 ## Data Persistence
 
 All MinIO data is persisted in the Home Assistant managed volume. The add-on uses:
 
-- `/data/<data_path>` for object storage
+- `/media/<data_path>` for object storage (default)
+- `/data/<data_path>` if `data_base: data` is selected
 - `/config` for configuration (if needed)
 
 ## Using MinIO with Applications

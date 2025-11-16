@@ -15,15 +15,18 @@ ports:
 ports_description:
   9000/tcp: MinIO S3 API
   9001/tcp: MinIO Web Console
+
 options:
   admin_user: admin
   admin_password: changeme123
   data_path: minio
+  data_base: media
   browser_enabled: true
 schema:
   admin_user: str
   admin_password: password
   data_path: str
+  data_base: list(media|data)
   browser_enabled: bool
 map_config: true
 map_data: true

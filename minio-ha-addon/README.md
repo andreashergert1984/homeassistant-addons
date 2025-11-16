@@ -20,13 +20,15 @@ MinIO is a high-performance, S3-compatible object storage system. This add-on ru
 5. Start the add-on
 6. Access the console at `http://<home-assistant-host>:9001`
 
+
 ## Configuration
 
 ### Options
 
 - `admin_user` (string, required): MinIO root username (default: `admin`)
 - `admin_password` (password, required): MinIO root password - **change this!**
-- `data_path` (string): Subdirectory under `/data` for MinIO storage (default: `minio`)
+- `data_path` (string): Subdirectory for MinIO storage (default: `minio`)
+- `data_base` (media|data): Base directory for MinIO data, either `/media` or `/data` (default: `media`)
 - `browser_enabled` (boolean): Enable web console access (default: `true`)
 
 ### Example Configuration
@@ -35,6 +37,7 @@ MinIO is a high-performance, S3-compatible object storage system. This add-on ru
 admin_user: minio-admin
 admin_password: MySecurePassword123!
 data_path: minio
+data_base: media
 browser_enabled: true
 ```
 
@@ -44,13 +47,16 @@ browser_enabled: true
 2. **S3 API**: Connect S3 clients to `http://<home-assistant-host>:9000`
 3. **Create Buckets**: Use the web console to create buckets for organizing your data
 
+
 ## Data Storage
 
-By default, MinIO data is stored at `/data/minio` inside the container, which maps to the Home Assistant data volume. You can configure an alternative path using the `data_path` option.
+By default, MinIO data is stored at `/media/minio` inside the container, which maps to the Home Assistant media volume. You can configure an alternative path using the `data_path` and `data_base` options.
 
 The add-on supports:
-- `map_data: true` - stores in `/data`
-- `map_media: true` - allows access to `/media` for bulk storage
+- `map_data: true` - allows storage in `/data`
+- `map_media: true` - allows storage in `/media`
+
+Set `data_base: media` to use `/media/<data_path>`, or `data_base: data` to use `/data/<data_path>`.
 
 ## Support
 
