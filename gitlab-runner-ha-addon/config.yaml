@@ -1,5 +1,5 @@
 name: GitLab Runner
-version: "1.0.0"
+version: "1.0.1"
 slug: gitlab-runner-ha-addon
 description: "GitLab Runner for Home Assistant Supervisor."
 url: "https://docs.gitlab.com/runner/"
