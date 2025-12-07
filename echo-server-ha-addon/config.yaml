@@ -1,0 +1,15 @@
+name: Echo Server
+version: "1.0.0"
+slug: echo-server-ha-addon
+description: "A simple echo webserver that replies with the request data and headers."
+url: "https://github.com/andreashergert1984/homeassistant-addons"
+startup: services
+boot: auto
+map_data: false
+map_config: false
+options:
+  port: 8080
+schema:
+  port: int
+ports:
+  "{port}/tcp": null
