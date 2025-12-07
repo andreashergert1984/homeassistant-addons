@@ -5,6 +5,10 @@ description: "A simple echo webserver that replies with the request data and hea
 url: "https://github.com/andreashergert1984/homeassistant-addons"
 startup: services
 boot: auto
+arch:
+  - amd64
+  - armv7
+  - aarch64
 map_data: false
 map_config: false
 options:
@@ -12,4 +16,4 @@ options:
 schema:
   port: int
 ports:
-  "{port}/tcp": null
+  "8080/tcp": 8080

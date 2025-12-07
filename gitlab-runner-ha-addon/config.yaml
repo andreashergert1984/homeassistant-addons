@@ -5,6 +5,10 @@ description: "GitLab Runner for Home Assistant Supervisor."
 url: "https://docs.gitlab.com/runner/"
 startup: services
 boot: auto
+arch:
+  - amd64
+  - armv7
+  - aarch64
 map_data: true
 map_config: false
 options:
