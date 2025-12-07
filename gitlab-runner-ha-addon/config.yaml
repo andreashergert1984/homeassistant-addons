@@ -1,0 +1,20 @@
+name: GitLab Runner
+version: "1.0.0"
+slug: gitlab-runner-ha-addon
+description: "GitLab Runner for Home Assistant Supervisor."
+url: "https://docs.gitlab.com/runner/"
+startup: services
+boot: auto
+map_data: true
+map_config: false
+options:
+  registration_token: ""
+  gitlab_url: "https://gitlab.com/"
+  runner_tags: "ha"
+  executor: "shell"
+schema:
+  registration_token: str
+  gitlab_url: str
+  runner_tags: str
+  executor: str
+ports: {}

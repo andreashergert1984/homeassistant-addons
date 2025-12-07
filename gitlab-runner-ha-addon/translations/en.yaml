@@ -1,0 +1,5 @@
+configuration:
+  registration_token: "Registration Token"
+  gitlab_url: "GitLab URL"
+  runner_tags: "Runner Tags"
+  executor: "Executor"
