@@ -13,7 +13,13 @@ if [ ! -f "$CONFIG_PATH" ]; then
     --config "$CONFIG_PATH"
 fi
 
+
 OPTIONS_PATH="/data/options.json"
+
+# Debug: Show options.json content
+echo "===== /data/options.json content ====="
+cat "$OPTIONS_PATH" || echo "(Could not read $OPTIONS_PATH)"
+echo "======================================"
 
 # Read options from Home Assistant
 if [ -f "$OPTIONS_PATH" ]; then
@@ -25,6 +31,12 @@ else
   echo "ERROR: $OPTIONS_PATH not found!"
   exit 1
 fi
+
+# Debug: Show loaded variables
+echo "GITLAB_URL: $GITLAB_URL"
+echo "REGISTRATION_TOKEN: $REGISTRATION_TOKEN"
+echo "RUNNER_TAGS: $RUNNER_TAGS"
+echo "EXECUTOR: $EXECUTOR"
 
 if [ -z "$GITLAB_URL" ] || [ "$GITLAB_URL" = "null" ]; then
   echo "ERROR: gitlab_url is not set!"
