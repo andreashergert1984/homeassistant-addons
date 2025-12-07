@@ -2,7 +2,7 @@
 FROM debian:bullseye-slim
 
 RUN apt-get update && \
-    apt-get install -y curl ca-certificates && \
+    apt-get install -y curl ca-certificates jq && \
     curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh | bash && \
     apt-get install -y gitlab-runner && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
