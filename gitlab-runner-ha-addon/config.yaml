@@ -11,6 +11,7 @@ arch:
   - aarch64
 map_data: true
 map_config: false
+docker_api: true
 cap_add:
   - SYS_ADMIN
   - NET_ADMIN
