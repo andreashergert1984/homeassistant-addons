@@ -1,2 +1,4 @@
 configuration:
-  port: "Port"
+  port:
+    name: "Port"
+    description: "The port to expose the echo server on"
