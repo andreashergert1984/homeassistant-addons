@@ -55,7 +55,7 @@ environment:
     letsencrypt['enable'] = false;  # Disable Let's Encrypt (handled by HA) 
     letsencrypt['auto_renew'] = false;
     GITLAB_ROOT_PASSWORD = "changeme";  # Change this password after first login!
-    registry_external_url 'http://registry.hergert.info:5050';
+    registry_external_url 'https://registry.hergert.info';
     gitlab_rails['registry_enabled'] = true;
     registry_nginx['listen_https'] = false;
     registry_nginx['listen_port'] = 5050;
