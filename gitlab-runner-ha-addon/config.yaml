@@ -13,6 +13,9 @@ map_data: true
 map_config: false
 cap_add:
   - SYS_ADMIN
+  - NET_ADMIN
+security_opt:
+  - apparmor=unconfined
 options:
   registration_token: ""
   gitlab_url: "https://gitlab.com/"
