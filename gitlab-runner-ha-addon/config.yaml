@@ -11,8 +11,8 @@ arch:
   - aarch64
 map_data: true
 map_config: false
-privileged:
-  - true
+cap_add:
+  - SYS_ADMIN
 options:
   registration_token: ""
   gitlab_url: "https://gitlab.com/"
