@@ -16,9 +16,11 @@ options:
   gitlab_url: "https://gitlab.com/"
   runner_tags: "ha"
   executor: "shell"
+  docker_image: "alpine:latest"
 schema:
   registration_token: str
   gitlab_url: str
   runner_tags: str
   executor: str
+  docker_image: str
 ports: {}

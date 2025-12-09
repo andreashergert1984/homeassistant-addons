@@ -3,3 +3,4 @@ configuration:
   gitlab_url: "GitLab URL"
   runner_tags: "Runner Tags"
   executor: "Executor"
+  docker_image: "Docker Image"

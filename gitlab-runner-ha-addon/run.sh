@@ -14,6 +14,7 @@ if [ -f "$OPTIONS_PATH" ]; then
   REGISTRATION_TOKEN=$(jq -r '.registration_token' "$OPTIONS_PATH")
   RUNNER_TAGS=$(jq -r '.runner_tags' "$OPTIONS_PATH")
   EXECUTOR=$(jq -r '.executor' "$OPTIONS_PATH")
+  DOCKER_IMAGE=$(jq -r '.docker_image' "$OPTIONS_PATH")
 else
   echo "ERROR: $OPTIONS_PATH not found!"
   exit 1
@@ -24,6 +25,7 @@ echo "GITLAB_URL: $GITLAB_URL"
 echo "REGISTRATION_TOKEN: $REGISTRATION_TOKEN"
 echo "RUNNER_TAGS: $RUNNER_TAGS"
 echo "EXECUTOR: $EXECUTOR"
+echo "DOCKER_IMAGE: $DOCKER_IMAGE"
 
 if [ -z "$GITLAB_URL" ] || [ "$GITLAB_URL" = "null" ]; then
   echo "ERROR: gitlab_url is not set!"
@@ -36,13 +38,24 @@ fi
 
 if [ ! -f "$CONFIG_PATH" ]; then
   echo "Registering GitLab Runner..."
-  gitlab-runner register \
-    --non-interactive \
-    --url "$GITLAB_URL" \
-    --registration-token "$REGISTRATION_TOKEN" \
-    --executor "$EXECUTOR" \
-    --tag-list "$RUNNER_TAGS" \
-    --config "$CONFIG_PATH"
+  if [ "$EXECUTOR" = "docker" ]; then
+    gitlab-runner register \
+      --non-interactive \
+      --url "$GITLAB_URL" \
+      --registration-token "$REGISTRATION_TOKEN" \
+      --executor "$EXECUTOR" \
+      --docker-image "$DOCKER_IMAGE" \
+      --tag-list "$RUNNER_TAGS" \
+      --config "$CONFIG_PATH"
+  else
+    gitlab-runner register \
+      --non-interactive \
+      --url "$GITLAB_URL" \
+      --registration-token "$REGISTRATION_TOKEN" \
+      --executor "$EXECUTOR" \
+      --tag-list "$RUNNER_TAGS" \
+      --config "$CONFIG_PATH"
+  fi
 fi
 
 gitlab-runner run --config "$CONFIG_PATH"
