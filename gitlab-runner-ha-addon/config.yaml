@@ -11,7 +11,8 @@ arch:
   - aarch64
 map_data: true
 map_config: false
-privileged: true
+privileged:
+  - true
 options:
   registration_token: ""
   gitlab_url: "https://gitlab.com/"
