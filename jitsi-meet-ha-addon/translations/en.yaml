@@ -1,0 +1,19 @@
+configuration:
+  public_url:
+    name: Public URL
+    description: The public URL where Jitsi Meet will be accessible (e.g., https://meet.yourdomain.com)
+  enable_auth:
+    name: Enable Authentication
+    description: Require users to authenticate before creating rooms
+  enable_guests:
+    name: Enable Guests
+    description: Allow guest users to join rooms (when authentication is enabled)
+  enable_recording:
+    name: Enable Recording
+    description: Enable meeting recording functionality (requires additional setup)
+  jvb_port:
+    name: Videobridge Port
+    description: UDP port for Jitsi Videobridge (must be open in firewall for video/audio)
+  timezone:
+    name: Timezone
+    description: Server timezone (e.g., Europe/Berlin, America/New_York)

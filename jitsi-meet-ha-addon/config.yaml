@@ -1,0 +1,21 @@
+name: Jitsi Meet
+version: "1.0.0"
+slug: jitsi-meet-ha-addon
+description: "Jitsi Meet video conferencing web interface using meet.jit.si."
+url: "https://jitsi.org/"
+startup: services
+boot: auto
+arch:
+  - amd64
+  - aarch64
+  - armv7
+map_data: false
+map_config: false
+ports:
+  80/tcp: 8000
+ports_description:
+  80/tcp: "Web interface port"
+options:
+  default_room: "HomeAssistant"
+schema:
+  default_room: str
