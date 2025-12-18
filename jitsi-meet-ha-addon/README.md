@@ -47,6 +47,13 @@ timezone: "Europe/Berlin"
 - Port 8000 (HTTP) - Web interface
 - Internet connection for meet.jit.si API
 
+**Important:** Modern browsers require HTTPS for WebRTC (camera/microphone access) when accessing from non-localhost addresses. 
+
+### Solutions:
+1. **Use the "Open meet.jit.si directly" button** - Opens the meeting in a new tab with HTTPS
+2. **Set up HTTPS reverse proxy** - Use nginx or Home Assistant's built-in ingress with SSL
+3. **Access via localhost** - If you can access at http://127.0.0.1:8000, WebRTC will work
+
 ## Usage
 
 1. Open your browser and go to `http://<your-ha-ip>:8000`
@@ -56,6 +63,13 @@ timezone: "Europe/Berlin"
 5. Start your meeting!
 
 ## Troubleshooting
+
+## Troubleshooting
+
+**"WebRTC is not available in your browser" error:**
+- This occurs when accessing over HTTP from a non-localhost address
+- **Quick fix**: Click the "Open meet.jit.si directly" button to open in a new tab with HTTPS
+- **Permanent fix**: Set up HTTPS access (see solutions above)
 
 **Video/Audio not working:**
 - Check browser permissions for camera/microphone
