@@ -1,6 +1,6 @@
 ---
 name: Garage S3 Object Storage
-version: "1.1.0"
+version: "1.2.0"
 slug: garage_s3_homeassistant
 description: >-
   Lightweight, S3-compatible object storage powered by Garage — a self-hosted
@@ -11,6 +11,11 @@ arch:
   - aarch64
 startup: services
 boot: auto
+
+ingress: true
+ingress_port: 3909
+panel_icon: mdi:database
+panel_title: Garage S3
 
 ports:
   3900/tcp: 3900

@@ -86,6 +86,26 @@ export GARAGE_NODE_CAPACITY_GB="$NODE_CAPACITY_GB"
 export GARAGE_S3_PORT="$S3_PORT"
 export GARAGE_WEBUI_PORT="$WEBUI_PORT"
 
+# ─── Resolve HA ingress path for Web UI base path ────────────────────────────
+# Query the supervisor API so garage-webui can serve assets at the correct path
+# when accessed through the HA ingress panel (sidebar item).
+WEBUI_BASE_PATH=""
+if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    INGRESS_URL=$(curl -sf --max-time 5 \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        "http://supervisor/addons/self/info" \
+        | jq -r '.data.ingress_url // empty' 2>/dev/null || true)
+    if [ -n "$INGRESS_URL" ]; then
+        # Strip trailing slash; result is e.g. /api/hassio_ingress/<token>
+        WEBUI_BASE_PATH="${INGRESS_URL%/}"
+        echo "[run.sh] HA ingress path: ${WEBUI_BASE_PATH}"
+    else
+        echo "[run.sh] Supervisor token present but no ingress URL found — running without base path."
+    fi
+else
+    echo "[run.sh] No SUPERVISOR_TOKEN — running outside HA (direct port access)."
+fi
+
 # ─── Discover Garage Web UI binary ───────────────────────────────────────────
 WEBUI_BIN=""
 if [ "$WEBUI_ENABLED" = "true" ]; then
@@ -170,7 +190,7 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=API_BASE_URL="http://127.0.0.1:${ADMIN_PORT}",API_ADMIN_KEY="${ADMIN_TOKEN}",CONFIG_PATH="/etc/garage.toml",S3_REGION="${S3_REGION}",S3_ENDPOINT_URL="http://127.0.0.1:${S3_PORT}",PORT="${WEBUI_PORT}",HOST="0.0.0.0"
+environment=API_BASE_URL="http://127.0.0.1:${ADMIN_PORT}",API_ADMIN_KEY="${ADMIN_TOKEN}",CONFIG_PATH="/etc/garage.toml",S3_REGION="${S3_REGION}",S3_ENDPOINT_URL="http://127.0.0.1:${S3_PORT}",PORT="${WEBUI_PORT}",HOST="0.0.0.0",BASE_PATH="${WEBUI_BASE_PATH}"
 WEBUI_EOF
     echo "[run.sh] Web UI enabled on port ${WEBUI_PORT}"
 fi
@@ -184,6 +204,7 @@ echo "  Storage path : ${STORAGE_DIR}"
 echo "  S3 API port  : ${S3_PORT}"
 echo "  Admin port   : ${ADMIN_PORT}  (loopback only)"
 echo "  Web UI port  : ${WEBUI_PORT}  (enabled: ${WEBUI_ENABLED})"
+echo "  Web UI path  : ${WEBUI_BASE_PATH:-/  (direct port, no ingress)}"
 echo "  S3 region    : ${S3_REGION}"
 echo "  Node zone    : ${NODE_ZONE}   capacity: ${NODE_CAPACITY_GB} GB"
 echo "  Log level    : ${LOG_LEVEL}"
