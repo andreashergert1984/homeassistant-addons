@@ -1,84 +1,99 @@
 #!/usr/bin/env bash
-# init_garage.sh — First-run cluster initialisation for a single-node Garage instance.
-# Runs once via supervisord (autorestart=false). Uses a flag file so it is
-# a no-op on subsequent container starts.
+# init_garage.sh — First-run cluster initialisation using the Garage admin HTTP API.
+# Runs once via supervisord (autorestart=false). A flag file prevents re-runs.
 set -euo pipefail
 
-GARAGE="/usr/local/bin/garage -c /etc/garage.toml"
 INIT_FLAG="/data/garage/.cluster_initialized"
-MAX_WAIT=90    # seconds to wait for Garage to become reachable
+MAX_WAIT=90
 POLL_INTERVAL=3
 
-# ─── Helper ───────────────────────────────────────────────────────────────────
+ADMIN_PORT="${GARAGE_ADMIN_PORT:-3903}"
+ADMIN_TOKEN="${GARAGE_ADMIN_TOKEN:-changeme123}"
+ADMIN_URL="http://127.0.0.1:${ADMIN_PORT}"
+ZONE="${GARAGE_NODE_ZONE:-dc1}"
+CAPACITY_GB="${GARAGE_NODE_CAPACITY_GB:-100}"
+# Capacity in bytes (SI: 1 GB = 1,000,000,000 bytes)
+CAPACITY_BYTES=$(( CAPACITY_GB * 1000000000 ))
+
 log()  { echo "[init_garage] $*"; }
-warn() { echo "[init_garage] WARNING: $*" >&2; }
 die()  { echo "[init_garage] ERROR: $*" >&2; exit 1; }
 
 # ─── Already initialised? ────────────────────────────────────────────────────
 if [ -f "$INIT_FLAG" ]; then
-    log "Cluster already initialised (flag: ${INIT_FLAG}). Nothing to do."
+    log "Cluster already initialised (${INIT_FLAG}). Nothing to do."
     exit 0
 fi
 
-# ─── Wait for Garage to accept requests ──────────────────────────────────────
-log "Waiting for Garage to become ready (up to ${MAX_WAIT}s)..."
+# ─── Wait for admin API ───────────────────────────────────────────────────────
+log "Waiting for Garage admin API at ${ADMIN_URL} (up to ${MAX_WAIT}s)..."
 WAITED=0
-until $GARAGE status >/dev/null 2>&1; do
+until curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+           "${ADMIN_URL}/v1/status" >/dev/null 2>&1; do
     if [ "$WAITED" -ge "$MAX_WAIT" ]; then
-        die "Garage did not become ready within ${MAX_WAIT} seconds."
+        die "Garage admin API not ready after ${MAX_WAIT}s."
     fi
     sleep "$POLL_INTERVAL"
-    WAITED=$((WAITED + POLL_INTERVAL))
+    WAITED=$(( WAITED + POLL_INTERVAL ))
 done
-log "Garage is ready after ${WAITED}s."
+log "Admin API ready after ${WAITED}s."
 
-# ─── Retrieve node ID ────────────────────────────────────────────────────────
-# Parse the first hex node ID from `garage status` output.
-# Status lines look like:
-#   abc1234567890def   hostname   ip:port   [tags]  [zone]  [capacity]
-log "Retrieving node ID from 'garage status'..."
-NODE_ID=$($GARAGE status 2>/dev/null \
-    | grep -v -E '^(====|ID|Healthy|Warning|Error|$)' \
-    | awk 'NF>=2 && $1 ~ /^[0-9a-f]{8}/ {print $1; exit}')
+# ─── Check if layout already applied ─────────────────────────────────────────
+STATUS=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "${ADMIN_URL}/v1/status")
+LAYOUT_VER=$(echo "$STATUS" | grep -oE '"layoutVersion":[0-9]+' | grep -oE '[0-9]+$' || echo "0")
+
+if [ "${LAYOUT_VER}" -gt 0 ]; then
+    log "Layout already at version ${LAYOUT_VER}. Marking as initialised."
+    touch "$INIT_FLAG"
+    exit 0
+fi
+
+# ─── Get node ID ─────────────────────────────────────────────────────────────
+NODE_ID=$(echo "$STATUS" | grep -oE '"id":"[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{32,}')
 
 if [ -z "$NODE_ID" ]; then
-    die "Could not determine node ID from 'garage status'. Is Garage running?"
+    die "Could not determine node ID from admin API response."
 fi
-log "Using node ID: ${NODE_ID}"
+log "Node ID: ${NODE_ID}"
+log "Zone: ${ZONE} | Capacity: ${CAPACITY_GB} GB (${CAPACITY_BYTES} bytes)"
 
-# ─── Assign node to zone / capacity ─────────────────────────────────────────
-ZONE="${GARAGE_NODE_ZONE:-dc1}"
-CAPACITY="${GARAGE_NODE_CAPACITY_GB:-100}"
+# ─── Stage layout assignment ─────────────────────────────────────────────────
+log "Staging layout assignment..."
+STAGE_RESP=$(curl -sf -X POST \
+    -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "[{\"id\":\"${NODE_ID}\",\"zone\":\"${ZONE}\",\"capacity\":${CAPACITY_BYTES},\"tags\":[]}]" \
+    "${ADMIN_URL}/v1/layout")
+log "Staged: $(echo "$STAGE_RESP" | grep -o '"stagedRoleChanges":\[[^]]*\]' || echo "$STAGE_RESP")"
 
-log "Assigning node: zone=${ZONE}, capacity=${CAPACITY}G"
-$GARAGE layout assign \
-    --zone     "$ZONE"       \
-    --capacity "${CAPACITY}G" \
-    "$NODE_ID"
+# ─── Determine next layout version ───────────────────────────────────────────
+LAYOUT=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "${ADMIN_URL}/v1/layout")
+CURRENT_VER=$(echo "$LAYOUT" | grep -oE '"version":[0-9]+' | head -1 | grep -oE '[0-9]+$' || echo "0")
+NEXT_VER=$(( CURRENT_VER + 1 ))
 
 # ─── Apply layout ────────────────────────────────────────────────────────────
-# Determine the next layout version (current + 1, or 1 on fresh install).
-CURRENT_VERSION=$($GARAGE layout show 2>/dev/null \
-    | grep -oE 'version [0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
-NEXT_VERSION=$(( CURRENT_VERSION + 1 ))
-
-log "Applying cluster layout version ${NEXT_VERSION} (current: ${CURRENT_VERSION})..."
-$GARAGE layout apply --version "$NEXT_VERSION"
+log "Applying layout version ${NEXT_VER}..."
+curl -sf -X POST \
+    -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"version\":${NEXT_VER}}" \
+    "${ADMIN_URL}/v1/layout/apply" >/dev/null
 
 # ─── Verify ──────────────────────────────────────────────────────────────────
-log "Verifying cluster status..."
-$GARAGE status
+FINAL=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "${ADMIN_URL}/v1/status")
+FINAL_VER=$(echo "$FINAL" | grep -oE '"layoutVersion":[0-9]+' | grep -oE '[0-9]+$' || echo "?")
+log "Layout version after apply: ${FINAL_VER}"
 
 # ─── Done ────────────────────────────────────────────────────────────────────
 touch "$INIT_FLAG"
 log "==========================================="
 log " Garage cluster initialised successfully!"
-log "  Node     : ${NODE_ID}"
+log "  Node     : ${NODE_ID:0:16}..."
 log "  Zone     : ${ZONE}"
-log "  Capacity : ${CAPACITY} GB"
+log "  Capacity : ${CAPACITY_GB} GB"
+log "  Layout v : ${FINAL_VER}"
 log "==========================================="
 log ""
-log "Next steps (optional, via Web UI or garage CLI):"
-log "  1. Create a bucket : garage bucket create <name>"
-log "  2. Create an S3 key: garage key create <name>"
-log "  3. Allow access    : garage bucket allow --read --write <bucket> --key <key>"
+log "Next steps — use the Web UI or garage CLI:"
+log "  garage bucket create <name>"
+log "  garage key create <name>"
+log "  garage bucket allow --read --write <bucket> --key <key>"
