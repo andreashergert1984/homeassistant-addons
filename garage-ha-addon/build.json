@@ -5,6 +5,6 @@
   },
   "squash": false,
   "args": {
-    "GARAGE_VERSION": "v1.0.1"
+    "GARAGE_VERSION": "v2.2.0"
   }
 }

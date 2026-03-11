@@ -43,7 +43,7 @@ fi
 log "Waiting for Garage admin API at ${ADMIN_URL} (up to ${MAX_WAIT}s)..."
 WAITED=0
 while true; do
-    if garage_get "/v1/status" >/dev/null 2>&1; then
+    if garage_get "/v2/GetClusterStatus" >/dev/null 2>&1; then
         break
     fi
     if [ "$WAITED" -ge "$MAX_WAIT" ]; then
@@ -55,7 +55,7 @@ done
 log "Admin API ready after ${WAITED}s."
 
 # ─── Get cluster status ───────────────────────────────────────────────────────
-STATUS=$(garage_get "/v1/status") || die "Failed to fetch /v1/status"
+STATUS=$(garage_get "/v2/GetClusterStatus") || die "Failed to fetch /v2/GetClusterStatus"
 log "Status fetched (${#STATUS} bytes)."
 
 # ─── Check if layout already applied ─────────────────────────────────────────
@@ -72,7 +72,7 @@ if [ "${LAYOUT_VER:-0}" -gt 0 ]; then
 fi
 
 # ─── Get node ID ─────────────────────────────────────────────────────────────
-# The top-level "node" field in /v1/status is always the current node's full ID.
+# The "node" field in /v2/GetClusterStatus is always the current node's full ID.
 # Match any 64-char hex string (works for both compact and spaced JSON).
 NODE_ID=$(echo "$STATUS" | grep -oE '[0-9a-f]{64}' | head -1 || true)
 
@@ -87,24 +87,24 @@ log "Capacity: ${CAPACITY_GB} GB (${CAPACITY_BYTES} bytes)"
 
 # ─── Stage layout assignment ─────────────────────────────────────────────────
 log "Staging layout assignment..."
-STAGE_RESULT=$(garage_post "/v1/layout" \
-    "[{\"id\":\"${NODE_ID}\",\"zone\":\"${ZONE}\",\"capacity\":${CAPACITY_BYTES},\"tags\":[]}]") \
-    || die "Failed to stage layout assignment (POST /v1/layout)"
+STAGE_RESULT=$(garage_post "/v2/UpdateClusterLayout" \
+    "{\"roles\":[{\"id\":\"${NODE_ID}\",\"zone\":\"${ZONE}\",\"capacity\":${CAPACITY_BYTES},\"tags\":[]}]}") \
+    || die "Failed to stage layout assignment (POST /v2/UpdateClusterLayout)"
 log "Layout staged."
 
 # ─── Determine next layout version ───────────────────────────────────────────
-LAYOUT=$(garage_get "/v1/layout") || die "Failed to fetch /v1/layout"
+LAYOUT=$(garage_get "/v2/GetClusterLayout") || die "Failed to fetch /v2/GetClusterLayout"
 CURRENT_VER=$(echo "$LAYOUT" | grep -oE '"version"[^0-9]*[0-9]+' \
     | head -1 | grep -oE '[0-9]+$' || echo "0")
 NEXT_VER=$(( CURRENT_VER + 1 ))
 log "Applying layout version ${NEXT_VER} (was ${CURRENT_VER})..."
 
 # ─── Apply layout ────────────────────────────────────────────────────────────
-garage_post "/v1/layout/apply" "{\"version\":${NEXT_VER}}" >/dev/null \
-    || die "Failed to apply layout (POST /v1/layout/apply)"
+garage_post "/v2/ApplyClusterLayout" "{\"version\":${NEXT_VER}}" >/dev/null \
+    || die "Failed to apply layout (POST /v2/ApplyClusterLayout)"
 
 # ─── Verify ──────────────────────────────────────────────────────────────────
-FINAL=$(garage_get "/v1/status") || die "Failed to verify status"
+FINAL=$(garage_get "/v2/GetClusterStatus") || die "Failed to verify status"
 FINAL_VER=$(echo "$FINAL" | grep -oE '"layoutVersion"[^0-9]*[0-9]+' \
     | grep -oE '[0-9]+$' || echo "?")
 
