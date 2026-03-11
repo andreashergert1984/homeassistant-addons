@@ -1,0 +1,10 @@
+{
+  "build_from": {
+    "amd64": "debian:bookworm-slim",
+    "aarch64": "debian:bookworm-slim"
+  },
+  "squash": false,
+  "args": {
+    "GARAGE_VERSION": "v1.0.1"
+  }
+}

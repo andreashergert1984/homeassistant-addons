@@ -1,0 +1,72 @@
+---
+name: Garage S3 Object Storage
+version: "1.0.0"
+slug: garage_s3_homeassistant
+description: >-
+  Lightweight, S3-compatible object storage powered by Garage — a self-hosted
+  alternative to MinIO written in Rust. Includes a web UI for bucket and key management.
+url: https://garagehq.deuxfleurs.fr/
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: auto
+
+ports:
+  3900/tcp: 3900
+  3909/tcp: 3909
+ports_description:
+  3900/tcp: Garage S3 API
+  3909/tcp: Garage Web UI
+
+options:
+  # Admin API token — used to authenticate the Web UI and garage CLI management calls
+  admin_token: changeme123
+  # RPC secret — 32-byte hex string shared between cluster nodes.
+  # Leave empty to auto-generate and persist across restarts.
+  rpc_secret: ""
+  # S3 region name returned to clients (any string, e.g. "garage" or "us-east-1")
+  s3_region: garage
+  # Where to store object data: "media" (/media) or "data" (/data)
+  data_base: media
+  # Subdirectory under the base path used for Garage data
+  data_path: garage
+  # Port for the S3-compatible API endpoint
+  s3_port: 3900
+  # Port for the internal admin API (used by Web UI; not exposed externally)
+  admin_port: 3903
+  # Port for the Garage Web UI
+  webui_port: 3909
+  # Enable the Garage Web UI
+  webui_enabled: true
+  # Availability zone / rack name for this node (any label, e.g. "dc1" or "home")
+  node_zone: dc1
+  # Advertised storage capacity in GB (used by Garage for replication balancing)
+  node_capacity_gb: 100
+  # Zstd compression level for stored objects: 0 = disabled, 1 (fast) – 9 (best)
+  compression_level: 1
+  # Log verbosity
+  log_level: info
+
+schema:
+  admin_token: password
+  rpc_secret: str
+  s3_region: str
+  data_base: list(media|data)
+  data_path: str
+  s3_port: int
+  admin_port: int
+  webui_port: int
+  webui_enabled: bool
+  node_zone: str
+  node_capacity_gb: int
+  compression_level: int
+  log_level: list(error|warn|info|debug|trace)
+
+map:
+  - type: addon_config
+    read_only: false
+  - type: data
+    read_only: false
+  - type: media
+    read_only: false

@@ -1,0 +1,70 @@
+---
+configuration:
+  admin_token:
+    name: Admin Token
+    description: >-
+      Password used to authenticate the Garage admin API and Web UI.
+      Change this before exposing the S3 port externally.
+  rpc_secret:
+    name: RPC Secret
+    description: >-
+      64-character hex string shared between cluster nodes for secure
+      inter-node communication. Leave empty to auto-generate and persist
+      across restarts (recommended for single-node setups).
+  s3_region:
+    name: S3 Region
+    description: >-
+      Region name returned to S3 clients. Any string is valid
+      (e.g. "garage", "us-east-1"). Must match the value configured in
+      client applications.
+  data_base:
+    name: Storage Base
+    description: >-
+      Where to store object data. "media" maps to /media (shared HA media
+      storage) and "data" maps to /data (add-on private storage).
+  data_path:
+    name: Storage Sub-directory
+    description: >-
+      Sub-directory name under the chosen base path where Garage stores
+      its metadata and object blocks (e.g. "garage").
+  s3_port:
+    name: S3 API Port
+    description: >-
+      TCP port on which the S3-compatible API listens. Default: 3900.
+  admin_port:
+    name: Admin API Port
+    description: >-
+      TCP port for the Garage admin API (loopback only, not exposed outside
+      the container). The Web UI connects to this port. Default: 3903.
+  webui_port:
+    name: Web UI Port
+    description: >-
+      TCP port on which the Garage Web UI listens. Default: 3909.
+  webui_enabled:
+    name: Enable Web UI
+    description: >-
+      Start the Garage Web UI alongside the storage server. The UI lets
+      you manage buckets, access keys, and browse objects through a browser.
+  node_zone:
+    name: Node Zone / Rack
+    description: >-
+      Availability zone label for this node (any string, e.g. "dc1",
+      "home", "rack1"). Used by Garage for replication balancing in
+      multi-node clusters.
+  node_capacity_gb:
+    name: Node Capacity (GB)
+    description: >-
+      Advertised storage capacity in gigabytes. Garage uses this value for
+      load-balancing in multi-node clusters. Set it close to the actual
+      available space on your storage volume.
+  compression_level:
+    name: Compression Level
+    description: >-
+      Zstd compression applied to stored object blocks.
+      0 = disabled, 1 = fastest (low CPU), 9 = best ratio (high CPU).
+      Default: 1 (recommended).
+  log_level:
+    name: Log Level
+    description: >-
+      Verbosity of Garage log output. Use "info" for normal operation,
+      "debug" or "trace" for troubleshooting.
