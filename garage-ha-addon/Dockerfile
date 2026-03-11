@@ -1,14 +1,18 @@
+# ─── Global ARGs (must be before any FROM to be usable in FROM lines) ────────
+ARG BUILD_FROM
+ARG GARAGE_VERSION=v1.0.1
+
 # ─── Stage 1: Extract Garage Web UI ─────────────────────────────────────────
 # khairul169/garage-webui is a Go backend + React frontend (single binary).
 # We copy the full image filesystem and discover the executable at build time.
 FROM khairul169/garage-webui:latest AS garage-webui-src
 
 # ─── Stage 2: Final image ────────────────────────────────────────────────────
-ARG BUILD_FROM=debian:bookworm-slim
 FROM ${BUILD_FROM}
 
 ARG TARGETARCH
-ARG GARAGE_VERSION=v1.0.1
+# Re-declare global ARGs inside the stage so they are accessible as env vars
+ARG GARAGE_VERSION
 
 LABEL \
     io.hass.name="Garage S3 Object Storage" \
@@ -50,7 +54,7 @@ RUN set -e; \
 COPY --from=garage-webui-src / /tmp/webui-root/
 RUN set -e; \
     WEBUI_BIN=$(find /tmp/webui-root -maxdepth 4 -type f -executable \
-        \( -name "server" -o -name "garage-webui" -o -name "garage-webui-server" \) \
+        \( -name "main" -o -name "server" -o -name "garage-webui" -o -name "garage-webui-server" \) \
         2>/dev/null | head -1); \
     if [ -n "${WEBUI_BIN}" ]; then \
         echo "Found garage-webui binary at ${WEBUI_BIN}"; \
