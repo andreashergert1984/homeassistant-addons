@@ -86,21 +86,21 @@ export GARAGE_NODE_CAPACITY_GB="$NODE_CAPACITY_GB"
 export GARAGE_S3_PORT="$S3_PORT"
 export GARAGE_WEBUI_PORT="$WEBUI_PORT"
 
-# ─── Resolve HA ingress path for Web UI base path ────────────────────────────
-# Query the supervisor API so garage-webui can serve assets at the correct path
-# when accessed through the HA ingress panel (sidebar item).
-WEBUI_BASE_PATH=""
+# ─── Resolve HA ingress path ─────────────────────────────────────────────────
+# Query the supervisor API to get the ingress path. nginx will use sub_filter
+# to inject this into the HTML so the React app can resolve all asset and API
+# URLs correctly through the HA ingress proxy.
+INGRESS_PATH=""
 if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
     INGRESS_URL=$(curl -sf --max-time 5 \
         -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
         "http://supervisor/addons/self/info" \
         | jq -r '.data.ingress_url // empty' 2>/dev/null || true)
     if [ -n "$INGRESS_URL" ]; then
-        # Strip trailing slash; result is e.g. /api/hassio_ingress/<token>
-        WEBUI_BASE_PATH="${INGRESS_URL%/}"
-        echo "[run.sh] HA ingress path: ${WEBUI_BASE_PATH}"
+        INGRESS_PATH="${INGRESS_URL%/}"   # strip trailing slash
+        echo "[run.sh] HA ingress path: ${INGRESS_PATH}"
     else
-        echo "[run.sh] Supervisor token present but no ingress URL found — running without base path."
+        echo "[run.sh] Supervisor token present but no ingress URL — direct port mode."
     fi
 else
     echo "[run.sh] No SUPERVISOR_TOKEN — running outside HA (direct port access)."
@@ -174,11 +174,52 @@ stderr_logfile_maxbytes=0
 environment=GARAGE_ADMIN_TOKEN="${ADMIN_TOKEN}",GARAGE_ENDPOINT="http://127.0.0.1:${ADMIN_PORT}",GARAGE_NODE_ZONE="${NODE_ZONE}",GARAGE_NODE_CAPACITY_GB="${NODE_CAPACITY_GB}"
 SUPERVISORD_EOF
 
-# Append Web UI block only when enabled
+# Append Web UI + nginx blocks only when enabled
+WEBUI_INTERNAL_PORT="3919"
 if [ "$WEBUI_ENABLED" = "true" ] && [ -n "$WEBUI_BIN" ]; then
+    # ── Generate nginx config ─────────────────────────────────────────────────
+    # nginx listens on the public WebUI port and proxies to the internal port.
+    # sub_filter rewrites the HTML so the React app resolves asset/API URLs
+    # through the HA ingress prefix (or works unchanged for direct port access).
+    mkdir -p /run/nginx
+    cat > /run/nginx/nginx.conf << NGINX_EOF
+worker_processes 1;
+error_log /dev/stderr warn;
+pid /run/nginx/nginx.pid;
+daemon off;
+
+events { worker_connections 256; }
+
+http {
+    access_log off;
+
+    server {
+        listen ${WEBUI_PORT};
+
+        location / {
+            proxy_pass         http://127.0.0.1:${WEBUI_INTERNAL_PORT};
+            proxy_set_header   Host \$host;
+            proxy_set_header   X-Real-IP \$remote_addr;
+            proxy_http_version 1.1;
+            proxy_read_timeout 60s;
+
+            # Prevent upstream compression so sub_filter can rewrite HTML
+            proxy_set_header   Accept-Encoding "";
+
+            # Inject the HA ingress path into the React app's base URL and
+            # rewrite all absolute asset paths so they resolve through ingress.
+            sub_filter_once off;
+            sub_filter 'window.__BASE_PATH = ""' 'window.__BASE_PATH = "${INGRESS_PATH}"';
+            sub_filter 'src="/'  'src="${INGRESS_PATH}/';
+            sub_filter 'href="/' 'href="${INGRESS_PATH}/';
+        }
+    }
+}
+NGINX_EOF
+
     cat >> "$SUPERVISOR_CFG" << WEBUI_EOF
 
-# ── Garage Web UI ─────────────────────────────────────────────────────────────
+# ── Garage Web UI (internal, proxied by nginx) ────────────────────────────────
 [program:garage-webui]
 command=${WEBUI_BIN}
 autostart=true
@@ -190,9 +231,22 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=API_BASE_URL="http://127.0.0.1:${ADMIN_PORT}",API_ADMIN_KEY="${ADMIN_TOKEN}",CONFIG_PATH="/etc/garage.toml",S3_REGION="${S3_REGION}",S3_ENDPOINT_URL="http://127.0.0.1:${S3_PORT}",PORT="${WEBUI_PORT}",HOST="0.0.0.0",BASE_PATH="${WEBUI_BASE_PATH}"
+environment=API_BASE_URL="http://127.0.0.1:${ADMIN_PORT}",API_ADMIN_KEY="${ADMIN_TOKEN}",CONFIG_PATH="/etc/garage.toml",S3_REGION="${S3_REGION}",S3_ENDPOINT_URL="http://127.0.0.1:${S3_PORT}",PORT="${WEBUI_INTERNAL_PORT}",HOST="127.0.0.1"
+
+# ── nginx reverse proxy (public Web UI port, handles ingress rewriting) ────────
+[program:nginx]
+command=/usr/sbin/nginx -c /run/nginx/nginx.conf
+autostart=true
+autorestart=true
+startretries=3
+startsecs=3
+priority=35
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 WEBUI_EOF
-    echo "[run.sh] Web UI enabled on port ${WEBUI_PORT}"
+    echo "[run.sh] Web UI enabled on port ${WEBUI_PORT} (nginx → internal :${WEBUI_INTERNAL_PORT})"
 fi
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -204,7 +258,7 @@ echo "  Storage path : ${STORAGE_DIR}"
 echo "  S3 API port  : ${S3_PORT}"
 echo "  Admin port   : ${ADMIN_PORT}  (loopback only)"
 echo "  Web UI port  : ${WEBUI_PORT}  (enabled: ${WEBUI_ENABLED})"
-echo "  Web UI path  : ${WEBUI_BASE_PATH:-/  (direct port, no ingress)}"
+echo "  Ingress path : ${INGRESS_PATH:-(none, direct port access)}"
 echo "  S3 region    : ${S3_REGION}"
 echo "  Node zone    : ${NODE_ZONE}   capacity: ${NODE_CAPACITY_GB} GB"
 echo "  Log level    : ${LOG_LEVEL}"

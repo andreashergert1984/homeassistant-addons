@@ -25,6 +25,7 @@ LABEL \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         supervisor \
+        nginx \
         jq \
         curl \
         openssl \
