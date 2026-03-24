@@ -9,8 +9,9 @@ metadata_dir = "@@META_DIR@@"
 data_dir     = "@@DATA_DIR@@"
 
 # ─── Database engine ─────────────────────────────────────────────────────────
-# lmdb is recommended for single-node setups
-db_engine = "lmdb"
+# sqlite: crash-safe (WAL journaling), recommended default
+# lmdb:   faster, but can corrupt on unclean shutdown
+db_engine = "@@DB_ENGINE@@"
 
 # ─── Block and replication ───────────────────────────────────────────────────
 block_size         = "1M"

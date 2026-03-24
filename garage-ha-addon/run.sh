@@ -25,6 +25,8 @@ WEBUI_ENABLED=$(jq -r '.webui_enabled   // true'          "$OPTIONS_FILE")
 NODE_ZONE=$(jq -r   '.node_zone         // "dc1"'         "$OPTIONS_FILE")
 NODE_CAPACITY_GB=$(jq -r '.node_capacity_gb // 100'       "$OPTIONS_FILE")
 COMPRESSION_LEVEL=$(jq -r '.compression_level // 1'       "$OPTIONS_FILE")
+DB_ENGINE=$(jq -r   '.db_engine         // "sqlite"'      "$OPTIONS_FILE")
+RESET_METADATA=$(jq -r '.reset_metadata // false'         "$OPTIONS_FILE")
 LOG_LEVEL=$(jq -r   '.log_level         // "info"'        "$OPTIONS_FILE")
 
 # ─── Determine storage paths ─────────────────────────────────────────────────
@@ -40,6 +42,23 @@ DATA_DIR="${STORAGE_DIR}/data"
 
 echo "[run.sh] Creating storage directories: $META_DIR, $DATA_DIR"
 mkdir -p "$META_DIR" "$DATA_DIR" "$STATE_DIR"
+
+# ─── Metadata reset (corruption recovery) ────────────────────────────────────
+if [ "$RESET_METADATA" = "true" ]; then
+    echo "[run.sh] WARNING: reset_metadata=true — wiping metadata directory and init flag."
+    echo "[run.sh]   Meta dir : $META_DIR"
+    echo "[run.sh]   Object data in $DATA_DIR is NOT deleted."
+    rm -rf "$META_DIR"
+    mkdir -p "$META_DIR"
+    rm -f "${STATE_DIR}/.cluster_initialized"
+    echo "[run.sh] Metadata wiped. You will need to recreate buckets and access keys."
+    # Clear the flag in options.json so it doesn't wipe again on next restart
+    if jq -e '.reset_metadata' "$OPTIONS_FILE" >/dev/null 2>&1; then
+        tmp=$(mktemp)
+        jq '.reset_metadata = false' "$OPTIONS_FILE" > "$tmp" && mv "$tmp" "$OPTIONS_FILE"
+        echo "[run.sh] reset_metadata reset to false in options.json."
+    fi
+fi
 
 # ─── RPC secret management ───────────────────────────────────────────────────
 # Priority: 1) user-provided in options  2) previously stored  3) auto-generate
@@ -74,6 +93,7 @@ sed \
     -e "s|@@ADMIN_PORT@@|${ADMIN_PORT}|g"               \
     -e "s|@@ADMIN_TOKEN@@|${ADMIN_TOKEN}|g"             \
     -e "s|@@COMPRESSION_LINE@@|${COMPRESSION_LINE}|g"   \
+    -e "s|@@DB_ENGINE@@|${DB_ENGINE}|g"                 \
     /etc/garage.toml.tmpl > "$GARAGE_CFG"
 
 # ─── Export env vars for supervisord child processes ─────────────────────────
