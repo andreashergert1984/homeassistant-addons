@@ -31,16 +31,20 @@ LOG_LEVEL=$(jq -r   '.log_level         // "info"'        "$OPTIONS_FILE")
 
 # ─── Determine storage paths ─────────────────────────────────────────────────
 if [ "$DATA_BASE" = "media" ]; then
-    BASE_DIR="/media"
+    DATA_BASE_DIR="/media"
 else
-    BASE_DIR="/data"
+    DATA_BASE_DIR="/data"
 fi
 
-STORAGE_DIR="${BASE_DIR}/${DATA_PATH}"
-META_DIR="${STORAGE_DIR}/meta"
-DATA_DIR="${STORAGE_DIR}/data"
+# Metadata (SQLite DB, node state) always lives on /data — a reliable local
+# filesystem with proper POSIX locking. /media may be a network share or
+# external drive that causes "database is locked" errors with SQLite.
+META_DIR="/data/${DATA_PATH}/meta"
+DATA_DIR="${DATA_BASE_DIR}/${DATA_PATH}/data"
 
-echo "[run.sh] Creating storage directories: $META_DIR, $DATA_DIR"
+echo "[run.sh] Creating storage directories:"
+echo "[run.sh]   Metadata : $META_DIR  (always on /data for reliable locking)"
+echo "[run.sh]   Objects  : $DATA_DIR"
 mkdir -p "$META_DIR" "$DATA_DIR" "$STATE_DIR"
 
 # ─── Metadata reset (corruption recovery) ────────────────────────────────────
@@ -274,7 +278,8 @@ echo ""
 echo "================================================"
 echo " Garage S3 Object Storage — starting"
 echo "================================================"
-echo "  Storage path : ${STORAGE_DIR}"
+echo "  Metadata path: ${META_DIR}"
+echo "  Objects path : ${DATA_DIR}"
 echo "  S3 API port  : ${S3_PORT}"
 echo "  Admin port   : ${ADMIN_PORT}  (loopback only)"
 echo "  Web UI port  : ${WEBUI_PORT}  (enabled: ${WEBUI_ENABLED})"

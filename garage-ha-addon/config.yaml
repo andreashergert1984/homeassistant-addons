@@ -1,6 +1,6 @@
 ---
 name: Garage S3 Object Storage
-version: "1.4.0"
+version: "1.4.1"
 slug: garage_s3_homeassistant
 description: >-
   Lightweight, S3-compatible object storage powered by Garage — a self-hosted
