@@ -146,17 +146,54 @@ echo "Nginx config written."
 # ── Prosody: register jicofo and jvb accounts ─────────────────────────────────
 # Ensure prosody data dirs have correct ownership
 chown -R prosody:prosody /data/prosody
-# Accounts are registered at startup every time (idempotent with --force or by checking)
-# We do this after supervisord starts prosody, so we use a post-start script below.
-# Write a helper that supervisord's eventlistener or a one-shot can call:
+
+# Build the registration script — wait for Prosody TCP port, then register
 cat > /usr/local/bin/register-jitsi-users.sh <<REGSCRIPT
 #!/bin/bash
-sleep 5  # wait for prosody to be ready
-prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register focus "auth.${XMPP_DOMAIN}" "${JICOFO_AUTH_PASSWORD}" 2>/dev/null || true
-prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register jvb "auth.${XMPP_DOMAIN}" "${JVB_AUTH_PASSWORD}" 2>/dev/null || true
-echo "Jitsi XMPP users registered."
+echo "[register-users] Waiting for Prosody port 5222..."
+for i in \$(seq 1 30); do
+    if bash -c "echo >/dev/tcp/127.0.0.1/5222" 2>/dev/null; then
+        echo "[register-users] Prosody is up after \${i}s"
+        break
+    fi
+    sleep 1
+done
+sleep 2  # extra settle time
+
+echo "[register-users] Registering focus@auth.${XMPP_DOMAIN}"
+prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register focus "auth.${XMPP_DOMAIN}" "${JICOFO_AUTH_PASSWORD}" && \
+    echo "[register-users] focus registered OK" || \
+    echo "[register-users] focus registration failed (may already exist)"
+
+echo "[register-users] Registering jvb@auth.${XMPP_DOMAIN}"
+prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register jvb "auth.${XMPP_DOMAIN}" "${JVB_AUTH_PASSWORD}" && \
+    echo "[register-users] jvb registered OK" || \
+    echo "[register-users] jvb registration failed (may already exist)"
 REGSCRIPT
 chmod +x /usr/local/bin/register-jitsi-users.sh
+
+# ── Detect Jicofo startup command ─────────────────────────────────────────────
+JICOFO_CMD=""
+for candidate in /usr/bin/jicofo /usr/share/jicofo/jicofo.sh /usr/share/jicofo/launch.sh; do
+    if [ -x "$candidate" ]; then
+        JICOFO_CMD="$candidate"
+        break
+    fi
+done
+if [ -z "$JICOFO_CMD" ]; then
+    # Try java -jar as last resort
+    JICOFO_JAR=$(find /usr/share/jicofo -name 'jicofo*.jar' 2>/dev/null | head -1)
+    if [ -n "$JICOFO_JAR" ]; then
+        JICOFO_CMD="java -jar ${JICOFO_JAR} --host=127.0.0.1 --domain=auth.${XMPP_DOMAIN} --user_domain=auth.${XMPP_DOMAIN}"
+    else
+        echo "WARNING: Jicofo startup command not found - conference allocation will not work!"
+        JICOFO_CMD="/bin/true"
+    fi
+fi
+echo "Jicofo command: ${JICOFO_CMD}"
+
+# Write the detected command into supervisord config
+sed -i "s|command=/usr/share/jicofo/jicofo.sh|command=${JICOFO_CMD}|" /etc/supervisor/conf.d/jitsi.conf
 
 # Add user registration as a supervisor one-shot program
 cat >> /etc/supervisor/conf.d/jitsi.conf <<EOF

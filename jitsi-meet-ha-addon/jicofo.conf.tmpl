@@ -2,7 +2,7 @@
 # Generated from /data/options.json by run.sh
 
 jicofo {
-  // XMPP connection to Prosody
+  // XMPP connection to Prosody (plain TCP, TLS terminated at Nginx Proxy Manager)
   xmpp {
     client {
       enabled = true
@@ -12,30 +12,17 @@ jicofo {
       username = "focus"
       password = "${JICOFO_AUTH_PASSWORD}"
       use-tls = false
+      disable-certificate-verification = true
     }
-    trusted-domains = [ "recorder.${XMPP_DOMAIN}" ]
   }
 
-  // Conference bridging
+  // Bridge brewery MUC — JVB instances announce themselves here
   bridge {
     brewery-jid = "jvbbrewery@internal.auth.${XMPP_DOMAIN}"
-    selection-strategy = "RegionBasedBridgeSelectionStrategy"
   }
 
-  // Conference MUC
-  conference {
-    muc = "conference.${XMPP_DOMAIN}"
-  }
-
+  // REST API for health checks
   rest {
     port = 8888
-  }
-
-  codec {
-    video {
-      vp8 { enabled = true }
-      vp9 { enabled = true }
-      h264 { enabled = true }
-    }
   }
 }
