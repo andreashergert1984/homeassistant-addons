@@ -91,7 +91,7 @@ fi
 export XMPP_DOMAIN XMPP_AUTH GUEST_VHOST_BLOCK JVB_SECRET JVB_AUTH_PASSWORD \
        JICOFO_AUTH_PASSWORD TURN_SECRET DEFAULT_ROOM ENABLE_AUTH ENABLE_GUESTS
 
-envsubst < /etc/jitsi/meet/prosody.cfg.lua.tmpl > /etc/prosody/conf.d/jitsi.cfg.lua
+envsubst < /etc/jitsi/meet/prosody.cfg.lua.tmpl > /etc/prosody/prosody.cfg.lua
 echo "Prosody config written."
 
 # ── Jicofo config ─────────────────────────────────────────────────────────────
@@ -161,12 +161,12 @@ done
 sleep 2  # extra settle time
 
 echo "[register-users] Registering focus@auth.${XMPP_DOMAIN}"
-prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register focus "auth.${XMPP_DOMAIN}" "${JICOFO_AUTH_PASSWORD}" && \
+prosodyctl register focus "auth.${XMPP_DOMAIN}" "${JICOFO_AUTH_PASSWORD}" && \
     echo "[register-users] focus registered OK" || \
     echo "[register-users] focus registration failed (may already exist)"
 
 echo "[register-users] Registering jvb@auth.${XMPP_DOMAIN}"
-prosodyctl --config /etc/prosody/conf.d/jitsi.cfg.lua register jvb "auth.${XMPP_DOMAIN}" "${JVB_AUTH_PASSWORD}" && \
+prosodyctl register jvb "auth.${XMPP_DOMAIN}" "${JVB_AUTH_PASSWORD}" && \
     echo "[register-users] jvb registered OK" || \
     echo "[register-users] jvb registration failed (may already exist)"
 REGSCRIPT

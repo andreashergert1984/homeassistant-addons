@@ -1,9 +1,9 @@
--- Prosody configuration template for Jitsi Meet HA add-on
--- Generated from /data/options.json by run.sh
+-- Prosody configuration for Jitsi Meet HA add-on
+-- Replaces /etc/prosody/prosody.cfg.lua entirely to avoid conf.d conflicts
 
 admins = { "focus@auth.${XMPP_DOMAIN}" }
 
--- Modules
+-- Global modules (standard set that ships with Debian Prosody package)
 modules_enabled = {
     "roster"; "saslauth"; "tls"; "dialback"; "disco";
     "posix"; "private"; "vcard"; "version"; "uptime";
@@ -17,9 +17,13 @@ modules_disabled = {}
 data_path = "/data/prosody"
 log = { info = "/data/logs/prosody.log" }
 
--- TLS: all connections come in already encrypted via Nginx Proxy Manager,
--- so we treat BOSH and WebSocket connections as secure and do NOT require
--- STARTTLS on the internal (plain HTTP/WS) path.
+-- HTTP server for BOSH and WebSocket — MUST be explicit or mod_bosh won't bind
+http_ports = { 5280 }
+http_interfaces = { "*" }
+https_ports = {}
+
+-- TLS: terminated upstream by Nginx Proxy Manager — treat all internal
+-- BOSH/WebSocket traffic as already secure, do not require STARTTLS
 consider_bosh_secure = true
 consider_websocket_secure = true
 cross_domain_bosh = true
@@ -29,45 +33,34 @@ cross_domain_websocket = true
 VirtualHost "${XMPP_DOMAIN}"
     authentication = "${XMPP_AUTH}"
     ssl = { key = "/data/prosody/certs/${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/${XMPP_DOMAIN}.crt" }
-    -- CRITICAL: do not require STARTTLS on c2s — TLS is terminated by the
-    -- reverse proxy (Nginx Proxy Manager) before reaching this container.
     c2s_require_encryption = false
-    -- Also mark this VirtualHost's BOSH/WS as secure at the host level
     consider_bosh_secure = true
     consider_websocket_secure = true
     modules_enabled = {
-        "bosh"; "websocket";
-        "ping"; "pubsub";
+        "bosh"; "websocket"; "ping";
     }
 
 ${GUEST_VHOST_BLOCK}
 
--- Internal component: Jicofo (conference focus)
+-- Jicofo authenticates here
 Component "focus.${XMPP_DOMAIN}" "client"
     authentication = "internal_plain"
 
--- Internal component: Jitsi Video Bridge
+-- JVB component
 Component "jvb.${XMPP_DOMAIN}"
     component_secret = "${JVB_SECRET}"
 
--- MUC (multi-user chat): conference rooms
+-- Conference MUC (keep modules list empty — jitsi MUC plugins may not be installed)
 Component "conference.${XMPP_DOMAIN}" "muc"
     storage = "memory"
-    modules_enabled = {
-        "muc_meeting_id"; "muc_domain_mapper"; "muc_rate_limit";
-    }
 
--- Internal MUC for bridge channels
+-- Internal MUC for JVB brewery
 Component "internal.auth.${XMPP_DOMAIN}" "muc"
     storage = "memory"
     admins = { "focus@auth.${XMPP_DOMAIN}", "jvb@auth.${XMPP_DOMAIN}" }
     restrict_room_creation = true
 
--- TURN credentials service (optional, gracefully skipped if plugin missing)
--- Component "turn.${XMPP_DOMAIN}" "turncredentials"
---     secret = "${TURN_SECRET}"
-
--- Authentication host (focus and jvb register here)
+-- Auth virtual host for focus + jvb internal accounts
 VirtualHost "auth.${XMPP_DOMAIN}"
     ssl = { key = "/data/prosody/certs/auth.${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/auth.${XMPP_DOMAIN}.crt" }
     authentication = "internal_plain"
