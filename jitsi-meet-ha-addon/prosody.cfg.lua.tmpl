@@ -22,6 +22,10 @@ http_ports = { 5280 }
 http_interfaces = { "*" }
 https_ports = {}
 
+-- External component protocol port (Jicofo service connection)
+component_ports = { 5347 }
+component_interfaces = { "127.0.0.1" }
+
 -- TLS: terminated upstream by Nginx Proxy Manager — treat all internal
 -- BOSH/WebSocket traffic as already secure, do not require STARTTLS
 consider_bosh_secure = true
@@ -42,9 +46,10 @@ VirtualHost "${XMPP_DOMAIN}"
 
 ${GUEST_VHOST_BLOCK}
 
--- Jicofo authenticates here
-Component "focus.${XMPP_DOMAIN}" "client"
-    authentication = "internal_plain"
+-- Jicofo external component — handles conference allocation IQs sent to focus.domain
+Component "focus.${XMPP_DOMAIN}"
+    component_secret = "${JICOFO_COMPONENT_SECRET}"
+    admins = { "focus@auth.${XMPP_DOMAIN}" }
 
 -- JVB component
 Component "jvb.${XMPP_DOMAIN}"

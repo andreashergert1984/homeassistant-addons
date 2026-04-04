@@ -46,6 +46,10 @@ var config = {
     // Disable third-party calls
     enableWelcomePage: true,
 
+    // Disable STUN/TURN discovery via XMPP extdisco (mod_turncredentials not
+    // installed — suppresses "service-unavailable" error spam in browser console)
+    useStunTurn: false,
+
     // Disable analytics to avoid phone-home
     analytics: {
         disabled: true,

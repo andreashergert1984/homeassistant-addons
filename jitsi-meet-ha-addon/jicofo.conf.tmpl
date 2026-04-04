@@ -2,7 +2,7 @@
 # Generated from /data/options.json by run.sh
 
 jicofo {
-  // XMPP connection to Prosody (plain TCP, TLS terminated at Nginx Proxy Manager)
+  // XMPP client connection — Jicofo signs in as focus@auth.domain
   xmpp {
     client {
       enabled = true
@@ -14,6 +14,14 @@ jicofo {
       password = "${JICOFO_AUTH_PASSWORD}"
       use-tls = false
       disable-certificate-verification = true
+    }
+
+    // Service (component) connection — makes Jicofo appear at focus.domain
+    // so browser IQ stanzas to focus.domain are handled by Jicofo
+    service {
+      hostname = "127.0.0.1"
+      port = 5347
+      password = "${JICOFO_COMPONENT_SECRET}"
     }
   }
 

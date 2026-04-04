@@ -44,11 +44,13 @@ if [ ! -f "$SECRETS_FILE" ]; then
     JVB_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
     JVB_AUTH_PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
     JICOFO_AUTH_PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+    JICOFO_COMPONENT_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
     TURN_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
     cat > "$SECRETS_FILE" <<EOF
 JVB_SECRET=${JVB_SECRET}
 JVB_AUTH_PASSWORD=${JVB_AUTH_PASSWORD}
 JICOFO_AUTH_PASSWORD=${JICOFO_AUTH_PASSWORD}
+JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET}
 TURN_SECRET=${TURN_SECRET}
 EOF
     chmod 600 "$SECRETS_FILE"
@@ -56,6 +58,12 @@ else
     echo "Loading existing secrets..."
     # shellcheck disable=SC1090
     source "$SECRETS_FILE"
+    # Migrate: add JICOFO_COMPONENT_SECRET if missing from old secrets file
+    if [ -z "$JICOFO_COMPONENT_SECRET" ]; then
+        echo "Migrating secrets: adding JICOFO_COMPONENT_SECRET..."
+        JICOFO_COMPONENT_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+        echo "JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET}" >> "$SECRETS_FILE"
+    fi
 fi
 
 # ── Prosody data directory & self-signed certs ──────────────────────────────
@@ -89,7 +97,7 @@ else
 fi
 
 export XMPP_DOMAIN XMPP_AUTH GUEST_VHOST_BLOCK JVB_SECRET JVB_AUTH_PASSWORD \
-       JICOFO_AUTH_PASSWORD TURN_SECRET DEFAULT_ROOM ENABLE_AUTH ENABLE_GUESTS
+       JICOFO_AUTH_PASSWORD JICOFO_COMPONENT_SECRET TURN_SECRET DEFAULT_ROOM ENABLE_AUTH ENABLE_GUESTS
 
 envsubst < /etc/jitsi/meet/prosody.cfg.lua.tmpl > /etc/prosody/prosody.cfg.lua
 echo "Prosody config written."
