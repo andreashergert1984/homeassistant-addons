@@ -102,15 +102,24 @@ echo "Jicofo config written."
 # ── JVB config ────────────────────────────────────────────────────────────────
 mkdir -p /etc/jitsi/videobridge
 
-if [ -n "$JVB_ADVERTISE_IP" ]; then
-    JVB_ADVERTISE_BLOCK="nat-harvester-public-address = \"${JVB_ADVERTISE_IP}\""
-else
-    JVB_ADVERTISE_BLOCK="// jvb_advertise_ip not set — rely on ICE for NAT traversal"
-fi
-export JVB_ADVERTISE_BLOCK
-
 envsubst < /etc/jitsi/videobridge/jvb.conf.tmpl > /etc/jitsi/videobridge/jvb.conf
 echo "JVB config written."
+
+# ── JVB sip-communicator.properties (NAT harvester + disable AWS lookup) ─────
+# JVB's legacyConfig reads this from /etc/jitsi/videobridge/sip-communicator.properties
+SCP_PROPS="/etc/jitsi/videobridge/sip-communicator.properties"
+cat > "$SCP_PROPS" <<EOF
+org.ice4j.ice.harvest.DISABLE_AWS_HARVESTER=true
+EOF
+if [ -n "$JVB_ADVERTISE_IP" ]; then
+    LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)
+    LOCAL_IP="${LOCAL_IP:-0.0.0.0}"
+    echo "org.ice4j.harvest.NAT_HARVESTER_LOCAL_ADDRESS=${LOCAL_IP}" >> "$SCP_PROPS"
+    echo "org.ice4j.harvest.NAT_HARVESTER_PUBLIC_ADDRESS=${JVB_ADVERTISE_IP}" >> "$SCP_PROPS"
+    echo "JVB NAT harvester: ${LOCAL_IP} -> ${JVB_ADVERTISE_IP}"
+else
+    echo "JVB NAT harvester not configured (jvb_advertise_host not set)"
+fi
 
 # ── Jitsi Meet web config.js ─────────────────────────────────────────────────
 # Lower-case boolean for JS

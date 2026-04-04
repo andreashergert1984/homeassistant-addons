@@ -23,7 +23,7 @@ videobridge {
       configs {
         shard-1 {
           hostname = "127.0.0.1"
-          port = 6222
+          port = 5222
           domain = "auth.${XMPP_DOMAIN}"
           username = "jvb"
           password = "${JVB_AUTH_PASSWORD}"
@@ -45,11 +45,6 @@ videobridge {
       port = 10000
     }
   }
-
-  // Advertise the public IP so NAT traversal works
-  local-address = "127.0.0.1"
-  // PUBLIC_IP is substituted at startup if jvb_advertise_ip is set
-  ${JVB_ADVERTISE_BLOCK}
 
   stats {
     enabled = true
