@@ -1,0 +1,56 @@
+// Jitsi Meet web config.js template
+// Generated from /data/options.json by run.sh
+
+var config = {
+    hosts: {
+        domain: '${XMPP_DOMAIN}',
+        muc: 'conference.${XMPP_DOMAIN}',
+        focus: 'focus.${XMPP_DOMAIN}',
+    },
+
+    bosh: '//${XMPP_DOMAIN}/http-bind',
+    websocket: 'wss://${XMPP_DOMAIN}/xmpp-websocket',
+
+    // Peer-to-peer disabled (use JVB for all calls)
+    p2p: {
+        enabled: false,
+    },
+
+    // Recording (Jibri) — enabled only if configured
+    fileRecordingsEnabled: ${RECORDING_ENABLED},
+    liveStreamingEnabled: false,
+
+    // Default room name shown in welcome page
+    defaultRoomName: '${DEFAULT_ROOM}',
+
+    // Start muted options
+    startAudioMuted: 9,
+    startVideoMuted: 9,
+
+    // Resolution
+    resolution: 720,
+    constraints: {
+        video: {
+            height: { ideal: 720, max: 1080, min: 180 },
+        },
+    },
+
+    // Disable third-party calls
+    enableWelcomePage: true,
+
+    // Disable analytics to avoid phone-home
+    analytics: {
+        disabled: true,
+    },
+
+    // Toolbar buttons
+    toolbarButtons: [
+        'microphone', 'camera', 'closedcaptions', 'desktop',
+        'fullscreen', 'fodeviceselection', 'hangup', 'profile',
+        'chat', 'settings', 'raisehand', 'videoquality', 'filmstrip',
+        'tileview', 'download', 'help', 'mute-everyone', 'security',
+    ],
+
+    // Require display name before joining
+    requireDisplayName: false,
+};

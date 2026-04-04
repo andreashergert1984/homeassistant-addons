@@ -1,0 +1,62 @@
+-- Prosody configuration template for Jitsi Meet HA add-on
+-- Generated from /data/options.json by run.sh
+
+admins = { "focus@auth.${XMPP_DOMAIN}" }
+
+-- Modules
+modules_enabled = {
+    "roster"; "saslauth"; "tls"; "dialback"; "disco";
+    "posix"; "private"; "vcard"; "version"; "uptime";
+    "time"; "ping"; "pep"; "register";
+    "admin_adhoc";
+}
+
+modules_disabled = {}
+
+-- Paths
+data_path = "/data/prosody"
+log = { info = "/data/logs/prosody.log" }
+
+-- Disable certificate checking between internal components
+consider_bosh_secure = true
+consider_websocket_secure = true
+
+-- Main virtual host
+VirtualHost "${XMPP_DOMAIN}"
+    authentication = "${XMPP_AUTH}"
+    ssl = { key = "/data/prosody/certs/${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/${XMPP_DOMAIN}.crt" }
+    modules_enabled = {
+        "bosh"; "websocket"; "smacks"; "carbons"; "blocklist"; "mam";
+    }
+
+${GUEST_VHOST_BLOCK}
+
+-- Internal component: Jicofo (conference focus)
+Component "focus.${XMPP_DOMAIN}" "client"
+    authentication = "internal_plain"
+
+-- Internal component: Jitsi Video Bridge
+Component "jvb.${XMPP_DOMAIN}"
+    component_secret = "${JVB_SECRET}"
+
+-- MUC (multi-user chat): conference rooms
+Component "conference.${XMPP_DOMAIN}" "muc"
+    storage = "memory"
+    modules_enabled = {
+        "muc_meeting_id"; "muc_domain_mapper"; "muc_rate_limit";
+    }
+
+-- Internal MUC for bridge channels
+Component "internal.auth.${XMPP_DOMAIN}" "muc"
+    storage = "memory"
+    admins = { "focus@auth.${XMPP_DOMAIN}", "jvb@auth.${XMPP_DOMAIN}" }
+    restrict_room_creation = true
+
+-- TURN credentials service
+Component "turn.${XMPP_DOMAIN}" "turncredentials"
+    secret = "${TURN_SECRET}"
+
+-- Authentication host (focus and jvb register here)
+VirtualHost "auth.${XMPP_DOMAIN}"
+    ssl = { key = "/data/prosody/certs/auth.${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/auth.${XMPP_DOMAIN}.crt" }
+    authentication = "internal_plain"

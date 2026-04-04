@@ -1,21 +1,36 @@
 name: Jitsi Meet
-version: "1.0.0"
+version: "2.0.0"
 slug: jitsi-meet-ha-addon
-description: "Jitsi Meet video conferencing web interface using meet.jit.si."
+description: "Self-hosted Jitsi Meet video conferencing (Prosody + Jicofo + JVB + Web)."
 url: "https://jitsi.org/"
 startup: services
 boot: auto
 arch:
   - amd64
   - aarch64
-  - armv7
-map_data: false
+map_data: true
 map_config: false
 ports:
   80/tcp: 8000
+  10000/udp: 10000
+  4443/tcp: 4443
 ports_description:
-  80/tcp: "Web interface port"
+  80/tcp: "Jitsi Meet web UI (proxy this via Nginx Proxy Manager for HTTPS)"
+  10000/udp: "JVB media streams (audio/video) — must be forwarded on your router"
+  4443/tcp: "JVB TCP fallback tunnel"
 options:
+  public_url: "https://meet.example.com"
   default_room: "HomeAssistant"
+  enable_auth: false
+  enable_guests: true
+  enable_recording: false
+  jvb_advertise_ip: ""
+  timezone: "Europe/Berlin"
 schema:
+  public_url: str
   default_room: str
+  enable_auth: bool
+  enable_guests: bool
+  enable_recording: bool
+  jvb_advertise_ip: str
+  timezone: str

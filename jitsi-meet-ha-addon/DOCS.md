@@ -1,63 +1,107 @@
 # Jitsi Meet Add-on Documentation
 
-## What is Jitsi Meet?
-
-Jitsi Meet is an open-source video conferencing solution that provides secure, high-quality video calls. This add-on provides a web interface that connects to the public meet.jit.si infrastructure.
-
 ## Architecture
 
-This add-on provides:
+This add-on runs the **complete self-hosted Jitsi Meet stack** inside a single container:
 
-- **Nginx**: Web server serving the Jitsi Meet interface
-- **Embedded API**: Uses meet.jit.si's External API for video conferencing
-- **Simple Interface**: Easy-to-use web interface for creating and joining meetings
+| Process | Role |
+|---------|------|
+| **Prosody** | XMPP server — handles signaling, BOSH, WebSocket |
+| **Jicofo** | Conference focus — orchestrates participants |
+| **JVB** (Jitsi Video Bridge) | Media relay — routes all audio and video streams |
+| **Nginx** | Web frontend — serves the Jitsi Meet UI on port 80 |
 
-## Configuration Details
+All processes are managed by **supervisord**. Logs are written to `/data/logs/`.
 
-### Public URL
-The `public_url` setting should match how users will access your Jitsi instance. This is important for:
-- BOSH/WebSocket connections
-- STUN/TURN server configuration
-- SSL certificate validation (if using HTTPS)
+---
 
-If you're using a reverse proxy with SSL, set this to your HTTPS domain.
+## Prerequisites
 
-### Authentication
-When `enable_auth` is `true`:
-- Only registered users can create new rooms
-- You must manually register users via Prosody
-- Guest access is controlled by `enable_guests`
+### 1. Port Forwarding (Router)
+JVB needs direct UDP access for media. On your router, forward:
 
-To register a user:
+| External | Internal (HA host) | Protocol |
+|----------|-------------------|----------|
+| 10000 | 10000 | **UDP** |
+| 4443 | 4443 | TCP (fallback) |
+
+> UDP 10000 cannot be proxied by Nginx Proxy Manager — it must be forwarded directly.
+
+### 2. Nginx Proxy Manager (HTTPS)
+Create a proxy host in NPM:
+
+- **Domain**: `meet.yourdomain.com`
+- **Scheme**: `http`
+- **Forward hostname/IP**: `<your-HA-host-ip>`
+- **Forward port**: `8000`
+- **SSL**: Let's Encrypt (enable "Force SSL" and "HTTP/2 Support")
+- **WebSocket Support**: ✅ Enable
+
+This provides the HTTPS that WebRTC (camera/microphone) requires.
+
+---
+
+## Configuration Options
+
+### `public_url` (required)
+The full HTTPS URL you set up in NPM, e.g. `https://meet.yourdomain.com`.  
+This is used to derive the XMPP domain and wired into all four component configs.
+
+### `jvb_advertise_ip` (recommended)
+Your Home Assistant host's **public IP address**. Required for NAT traversal so remote participants can reach JVB directly over UDP.  
+Leave empty only if all participants are on the same LAN.
+
+### `default_room`
+Room name pre-filled on the welcome page. Default: `HomeAssistant`.
+
+### `enable_auth`
+When `true`, only registered Prosody users can create rooms.  
+Register users inside the running container:
 ```bash
-docker exec <container> prosodyctl register <username> <domain> <password>
+docker exec <container_id> prosodyctl register alice meet.yourdomain.com secretpassword
 ```
 
-### Public URL
-The `public_url` setting is currently informational. The add-on uses meet.jit.si infrastructure for the actual video conferencing.
+### `enable_guests`
+When `enable_auth` is true, guests (unauthenticated users) can still join existing rooms.
 
-## Performance Tuning
+### `enable_recording`
+Enables the recording button in the UI. Actual recording requires [Jibri](https://github.com/jitsi/jibri), which is not included.
 
-For large meetings (>10 participants):
-- Increase available memory for the add-on
-- Use a dedicated machine if possible
-- Consider enabling simulcast (enabled by default)
-- Monitor CPU usage during meetings
+### `timezone`
+Server timezone, e.g. `Europe/Berlin`.
 
-## Security Considerations
+---
 
-### Without Authentication
-- Anyone with the room URL can join
-- Room names should be unpredictable
-- Consider using lobby mode for sensitive meetings
+## Persistent Data
 
-### With Authentication
-- Only registered users can host
-- Better control over who creates rooms
-- Guests can still join if `enable_guests` is true
+All state is stored in `/data` (mapped to the HA host):
 
-### Network Security
-- Use HTTPS in production (configure reverse proxy)
+| Path | Contents |
+|------|----------|
+| `/data/prosody/` | Prosody user accounts and room data |
+| `/data/prosody/certs/` | Self-signed internal TLS certs (auto-generated) |
+| `/data/jitsi-secrets.env` | Auto-generated shared secrets (JVB, Jicofo) — do not delete |
+| `/data/logs/` | Logs for all 4 processes |
+| `/data/recordings/` | Meeting recordings (if recording is enabled) |
+
+---
+
+## Troubleshooting
+
+**Video/audio does not work for remote participants:**  
+→ Check that UDP port 10000 is forwarded on your router to your HA host.  
+→ Set `jvb_advertise_ip` to your public IP.
+
+**Camera/microphone not accessible:**  
+→ Your browser requires HTTPS. Make sure Nginx Proxy Manager has SSL configured.
+
+**Participants cannot join:**  
+→ Tail `/data/logs/jvb.log` and `/data/logs/prosody.log` for errors.
+
+**Reset to clean state:**  
+→ Delete `/data/jitsi-secrets.env` to regenerate all secrets on next start.  
+→ Delete `/data/prosody/` to clear all user accounts.
+
 - Restrict admin ports (only 8000/8443 need public access)
 - Keep the add-on updated
 

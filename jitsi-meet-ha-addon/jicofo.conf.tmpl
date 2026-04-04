@@ -1,0 +1,41 @@
+# Jicofo configuration template for Jitsi Meet HA add-on
+# Generated from /data/options.json by run.sh
+
+jicofo {
+  // XMPP connection to Prosody
+  xmpp {
+    client {
+      enabled = true
+      hostname = "127.0.0.1"
+      port = 5222
+      domain = "auth.${XMPP_DOMAIN}"
+      username = "focus"
+      password = "${JICOFO_AUTH_PASSWORD}"
+      use-tls = false
+    }
+    trusted-domains = [ "recorder.${XMPP_DOMAIN}" ]
+  }
+
+  // Conference bridging
+  bridge {
+    brewery-jid = "jvbbrewery@internal.auth.${XMPP_DOMAIN}"
+    selection-strategy = "RegionBasedBridgeSelectionStrategy"
+  }
+
+  // Conference MUC
+  conference {
+    muc = "conference.${XMPP_DOMAIN}"
+  }
+
+  rest {
+    port = 8888
+  }
+
+  codec {
+    video {
+      vp8 { enabled = true }
+      vp9 { enabled = true }
+      h264 { enabled = true }
+    }
+  }
+}

@@ -1,15 +1,29 @@
 # Jitsi Meet Home Assistant Add-on
 
-This add-on provides a convenient web interface for Jitsi Meet video conferencing using meet.jit.si infrastructure.
+Self-hosted Jitsi Meet video conferencing running entirely inside a single Home Assistant add-on container (Prosody + Jicofo + JVB + Nginx).
 
 ## Features
 
+- **Fully Self-Hosted**: No dependency on meet.jit.si — all traffic stays on your infrastructure
 - **Full Video Conferencing**: HD video and audio with multiple participants
 - **Screen Sharing**: Share your screen with meeting participants
 - **Chat**: In-meeting text chat functionality
 - **Mobile Support**: Works on mobile browsers
-- **No Account Required**: Guests can join without registration
-- **Easy Access**: Simple interface embedded in Home Assistant
+- **Optional Authentication**: Restrict room creation to registered users
+
+## Setup Checklist
+
+Before starting the add-on, complete these steps:
+
+- [ ] **Router — forward UDP 10000** to your Home Assistant host IP (required for JVB media streams)
+- [ ] **Router — forward TCP 4443** to your Home Assistant host IP (JVB TCP fallback)
+- [ ] **Nginx Proxy Manager** — create a proxy host:
+  - Domain: `meet.yourdomain.com`
+  - Scheme: `http`, Forward host/IP: `<HA-host-IP>`, Port: `8000`
+  - SSL: Let's Encrypt, enable "Force SSL" and "HTTP/2 Support"
+  - Enable **WebSocket Support**
+- [ ] **Add-on config** — set `public_url` to your HTTPS domain (e.g. `https://meet.yourdomain.com`)
+- [ ] **Add-on config** — set `jvb_advertise_ip` to your public IP address
 
 ## Installation
 
@@ -18,73 +32,61 @@ This add-on provides a convenient web interface for Jitsi Meet video conferencin
 3. Find "Jitsi Meet" and click Install
 4. Configure the add-on options (see Configuration below)
 5. Start the add-on
-6. Access Jitsi Meet at `http://<home-assistant-host>:8000`
+6. Access Jitsi Meet at `https://meet.yourdomain.com`
 
 ## Configuration
 
 ### Options
 
-- `public_url`: The public URL where Jitsi will be accessible (e.g., `https://meet.yourdomain.com`)
-- `enable_auth`: Enable authentication (users must be registered to create rooms)
-- `enable_guests`: Allow guests to join rooms (when auth is enabled)
-- `enable_recording`: Enable meeting recording functionality
-- `jvb_port`: UDP port for Jitsi Videobridge (default: 10000)
-- `timezone`: Server timezone (default: UTC)
+- `public_url` *(required)*: The public HTTPS URL, e.g. `https://meet.yourdomain.com`. Must match the domain in Nginx Proxy Manager.
+- `jvb_advertise_ip` *(recommended)*: Your public IP address for NAT traversal. Required for remote participants.
+- `default_room`: Room name pre-filled on the welcome page (default: `HomeAssistant`)
+- `enable_auth`: Enable authentication — only registered Prosody users can create rooms
+- `enable_guests`: Allow unauthenticated guests to join existing rooms (when auth is enabled)
+- `enable_recording`: Show recording button in the UI (requires Jibri — not included)
+- `timezone`: Server timezone (default: `Europe/Berlin`)
 
 ### Example Configuration
 
 ```yaml
-public_url: "https://meet.example.com"
+public_url: "https://meet.yourdomain.com"
+jvb_advertise_ip: "1.2.3.4"
+default_room: "HomeAssistant"
 enable_auth: false
 enable_guests: true
 enable_recording: false
-jvb_port: 10000
 timezone: "Europe/Berlin"
 ```
 
 ## Network Requirements
 
-- Port 8000 (HTTP) - Web interface
-- Internet connection for meet.jit.si API
+| Port | Protocol | Purpose | How to expose |
+|------|----------|---------|--------------|
+| 8000 | TCP | Web UI | Via Nginx Proxy Manager (HTTPS) |
+| 10000 | **UDP** | JVB media streams | **Router port forward — required** |
+| 4443 | TCP | JVB TCP fallback | Router port forward |
 
-**Important:** Modern browsers require HTTPS for WebRTC (camera/microphone access) when accessing from non-localhost addresses. 
+> UDP 10000 cannot go through Nginx Proxy Manager — it must be forwarded directly on your router.
 
-### Solutions:
-1. **Use the "Open meet.jit.si directly" button** - Opens the meeting in a new tab with HTTPS
-2. **Set up HTTPS reverse proxy** - Use nginx or Home Assistant's built-in ingress with SSL
-3. **Access via localhost** - If you can access at http://127.0.0.1:8000, WebRTC will work
+## Registering Users (when `enable_auth: true`)
 
-## Usage
-
-1. Open your browser and go to `http://<your-ha-ip>:8000`
-2. Enter a room name and click "Go"
-3. Allow camera and microphone access
-4. Share the room URL with participants
-5. Start your meeting!
+```bash
+docker exec <container_id> prosodyctl register alice meet.yourdomain.com secretpassword
+```
 
 ## Troubleshooting
 
-## Troubleshooting
+**Video/audio does not work for remote participants:**
+- Verify UDP port 10000 is forwarded on your router to the HA host
+- Set `jvb_advertise_ip` to your public IP
 
-**"WebRTC is not available in your browser" error:**
-- This occurs when accessing over HTTP from a non-localhost address
-- **Quick fix**: Click the "Open meet.jit.si directly" button to open in a new tab with HTTPS
-- **Permanent fix**: Set up HTTPS access (see solutions above)
+**Camera/microphone not accessible:**
+- Browser requires HTTPS — make sure NPM has SSL configured and "Force SSL" is enabled
 
-**Video/Audio not working:**
-- Check browser permissions for camera/microphone
-- Ensure stable internet connection
-- Try using a different browser
+**Participants cannot join / connection errors:**
+- Tail logs: `/data/logs/jvb.log`, `/data/logs/prosody.log`, `/data/logs/jicofo.log`
 
-**Can't connect to meeting:**
-- Check that the add-on is running
-- Verify internet connection
-- Check browser console for errors
+**Reset to clean state:**
+- Delete `/data/jitsi-secrets.env` to regenerate all shared secrets on next start
+- Delete `/data/prosody/` to clear all user accounts
 
-## Advanced
-
-This add-on provides a web interface to meet.jit.si. For a fully self-hosted solution with your own Jitsi infrastructure, you would need to run separate containers for Prosody, Jicofo, and JVB components.
-
-### Customization
-
-You can customize the meeting interface by modifying the `/usr/share/nginx/html/index.html` file in the container.

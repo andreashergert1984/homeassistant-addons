@@ -1,19 +1,22 @@
 configuration:
   public_url:
     name: Public URL
-    description: The public URL where Jitsi Meet will be accessible (e.g., https://meet.yourdomain.com)
+    description: "The public HTTPS URL where Jitsi Meet is accessible, e.g. https://meet.yourdomain.com. Must match the domain configured in Nginx Proxy Manager."
+  default_room:
+    name: Default Room Name
+    description: "Room name pre-filled on the welcome page."
   enable_auth:
     name: Enable Authentication
-    description: Require users to authenticate before creating rooms
+    description: "Require users to authenticate (via Prosody) before creating rooms."
   enable_guests:
     name: Enable Guests
-    description: Allow guest users to join rooms (when authentication is enabled)
+    description: "Allow unauthenticated guests to join rooms when authentication is enabled."
   enable_recording:
     name: Enable Recording
-    description: Enable meeting recording functionality (requires additional setup)
-  jvb_port:
-    name: Videobridge Port
-    description: UDP port for Jitsi Videobridge (must be open in firewall for video/audio)
+    description: "Enable meeting recording button in the UI (requires Jibri — not included in this add-on)."
+  jvb_advertise_ip:
+    name: JVB Public IP
+    description: "Public IP of your Home Assistant host. Required for NAT traversal if UDP 10000 is forwarded on your router. Leave empty for auto-detection."
   timezone:
     name: Timezone
-    description: Server timezone (e.g., Europe/Berlin, America/New_York)
+    description: "Server timezone, e.g. Europe/Berlin or America/New_York."
