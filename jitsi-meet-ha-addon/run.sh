@@ -152,6 +152,14 @@ cat > "${JITSI_WEB_ROOT}/head.html" <<'HEADHTML'
 HEADHTML
 echo "head.html written."
 
+# Create minimal stubs for optional JS files that may not be included by the
+# Jitsi package (modern builds bundle these into app.bundle.min.js).
+# Without them, nginx's SPA fallback serves index.html as text/html, which
+# the browser then tries to parse as JS causing "Unexpected token '<'" errors.
+[ -f "${JITSI_WEB_ROOT}/utils.js" ] || echo '/* utils stub */' > "${JITSI_WEB_ROOT}/utils.js"
+[ -f "${JITSI_WEB_ROOT}/do_external_connect.js" ] || echo '/* do_external_connect stub */' > "${JITSI_WEB_ROOT}/do_external_connect.js"
+echo "JS stubs checked."
+
 # ── Nginx site config ─────────────────────────────────────────────────────────
 # Remove default site, write Jitsi site
 rm -f /etc/nginx/conf.d/default.conf /etc/nginx/sites-enabled/default 2>/dev/null || true

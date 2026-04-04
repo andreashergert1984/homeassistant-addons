@@ -39,6 +39,13 @@ server {
         proxy_read_timeout 900s;
     }
 
+    # Static assets: serve from disk or 404 — never fall back to index.html
+    # (prevents nginx SPA fallback from serving HTML when a .js file is missing,
+    # which causes "Unexpected token '<'" parse errors in the browser)
+    location ~* \.(js|css|wasm|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|webp|json)$ {
+        try_files $uri =404;
+    }
+
     location ~ ^/([^/?&:'"]+)$ {
         try_files $uri @root_path;
     }
