@@ -23,6 +23,11 @@ var config = {
     // Default room name shown in welcome page
     defaultRoomName: '${DEFAULT_ROOM}',
 
+    // Use a numeric room name generator instead of CamelCaseWords.
+    // CamelCase patterns (e.g. FrustratingReasonsHarvestEfficiently) trigger
+    // Chrome's Safe Browsing heuristics and cause a "Dangerous site" warning.
+    generateRoomnames: false,
+
     // Start muted options
     startAudioMuted: 9,
     startVideoMuted: 9,
