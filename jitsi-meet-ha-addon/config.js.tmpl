@@ -9,7 +9,10 @@ var config = {
     },
 
     bosh: '//${XMPP_DOMAIN}/http-bind',
-    websocket: 'wss://${XMPP_DOMAIN}/xmpp-websocket',
+    // websocket disabled: lib-jitsi-meet tries WebSocket first and does not
+    // reliably fall back when the WS upgrade fails (code 1006). BOSH is
+    // confirmed working and is sufficient. Re-enable once WS is debugged.
+    // websocket: 'wss://${XMPP_DOMAIN}/xmpp-websocket',
 
     // Peer-to-peer disabled (use JVB for all calls)
     p2p: {
