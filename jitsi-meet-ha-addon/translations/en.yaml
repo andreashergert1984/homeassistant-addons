@@ -14,9 +14,9 @@ configuration:
   enable_recording:
     name: Enable Recording
     description: "Enable meeting recording button in the UI (requires Jibri — not included in this add-on)."
-  jvb_advertise_ip:
-    name: JVB Public IP
-    description: "Public IP of your Home Assistant host. Required for NAT traversal if UDP 10000 is forwarded on your router. Leave empty for auto-detection."
+  jvb_advertise_host:
+    name: JVB Public Host / IP
+    description: "Your public IP address or DDNS hostname (e.g. myhome.duckdns.org). Resolved to an IP at startup. Required for remote participants to reach the video bridge over UDP 10000."
   timezone:
     name: Timezone
     description: "Server timezone, e.g. Europe/Berlin or America/New_York."

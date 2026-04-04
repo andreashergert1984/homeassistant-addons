@@ -23,7 +23,7 @@ Before starting the add-on, complete these steps:
   - SSL: Let's Encrypt, enable "Force SSL" and "HTTP/2 Support"
   - Enable **WebSocket Support**
 - [ ] **Add-on config** — set `public_url` to your HTTPS domain (e.g. `https://meet.yourdomain.com`)
-- [ ] **Add-on config** — set `jvb_advertise_ip` to your public IP address
+- [ ] **Add-on config** — set `jvb_advertise_host` to your public IP or DDNS hostname (e.g. `myhome.duckdns.org`)
 
 ## Installation
 
@@ -39,7 +39,7 @@ Before starting the add-on, complete these steps:
 ### Options
 
 - `public_url` *(required)*: The public HTTPS URL, e.g. `https://meet.yourdomain.com`. Must match the domain in Nginx Proxy Manager.
-- `jvb_advertise_ip` *(recommended)*: Your public IP address for NAT traversal. Required for remote participants.
+- `jvb_advertise_host` *(recommended)*: Your public IP **or DDNS hostname** (e.g. `myhome.duckdns.org`) for NAT traversal. The hostname is resolved to an IP at startup, so dynamic IPs are fully supported. Required for remote participants outside your LAN.
 - `default_room`: Room name pre-filled on the welcome page (default: `HomeAssistant`)
 - `enable_auth`: Enable authentication — only registered Prosody users can create rooms
 - `enable_guests`: Allow unauthenticated guests to join existing rooms (when auth is enabled)
@@ -50,7 +50,7 @@ Before starting the add-on, complete these steps:
 
 ```yaml
 public_url: "https://meet.yourdomain.com"
-jvb_advertise_ip: "1.2.3.4"
+jvb_advertise_host: "myhome.duckdns.org"
 default_room: "HomeAssistant"
 enable_auth: false
 enable_guests: true
@@ -78,7 +78,7 @@ docker exec <container_id> prosodyctl register alice meet.yourdomain.com secretp
 
 **Video/audio does not work for remote participants:**
 - Verify UDP port 10000 is forwarded on your router to the HA host
-- Set `jvb_advertise_ip` to your public IP
+- Set `jvb_advertise_host` to your public IP or DDNS hostname (e.g. `myhome.duckdns.org`)
 
 **Camera/microphone not accessible:**
 - Browser requires HTTPS — make sure NPM has SSL configured and "Force SSL" is enabled

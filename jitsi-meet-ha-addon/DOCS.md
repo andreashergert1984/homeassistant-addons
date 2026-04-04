@@ -47,8 +47,9 @@ This provides the HTTPS that WebRTC (camera/microphone) requires.
 The full HTTPS URL you set up in NPM, e.g. `https://meet.yourdomain.com`.  
 This is used to derive the XMPP domain and wired into all four component configs.
 
-### `jvb_advertise_ip` (recommended)
-Your Home Assistant host's **public IP address**. Required for NAT traversal so remote participants can reach JVB directly over UDP.  
+### `jvb_advertise_host` (recommended)
+Your Home Assistant host's **public IP address or DDNS hostname** (e.g. `myhome.duckdns.org`).  
+The add-on resolves the hostname to an IP at startup, so **dynamic IPs with DDNS are fully supported**.  
 Leave empty only if all participants are on the same LAN.
 
 ### `default_room`
@@ -90,7 +91,7 @@ All state is stored in `/data` (mapped to the HA host):
 
 **Video/audio does not work for remote participants:**  
 → Check that UDP port 10000 is forwarded on your router to your HA host.  
-→ Set `jvb_advertise_ip` to your public IP.
+→ Set `jvb_advertise_host` to your public IP or DDNS hostname.
 
 **Camera/microphone not accessible:**  
 → Your browser requires HTTPS. Make sure Nginx Proxy Manager has SSL configured.

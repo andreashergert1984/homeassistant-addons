@@ -24,7 +24,7 @@ options:
   enable_auth: false
   enable_guests: true
   enable_recording: false
-  jvb_advertise_ip: ""
+  jvb_advertise_host: ""
   timezone: "Europe/Berlin"
 schema:
   public_url: str
@@ -32,5 +32,5 @@ schema:
   enable_auth: bool
   enable_guests: bool
   enable_recording: bool
-  jvb_advertise_ip: str
+  jvb_advertise_host: str
   timezone: str

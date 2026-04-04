@@ -12,12 +12,25 @@ DEFAULT_ROOM=$(jq -r '.default_room // "HomeAssistant"' "$CONFIG_PATH")
 ENABLE_AUTH=$(jq -r '.enable_auth // false' "$CONFIG_PATH")
 ENABLE_GUESTS=$(jq -r '.enable_guests // true' "$CONFIG_PATH")
 ENABLE_RECORDING=$(jq -r '.enable_recording // false' "$CONFIG_PATH")
-JVB_ADVERTISE_IP=$(jq -r '.jvb_advertise_ip // ""' "$CONFIG_PATH")
+JVB_ADVERTISE_HOST=$(jq -r '.jvb_advertise_host // ""' "$CONFIG_PATH")
 TIMEZONE=$(jq -r '.timezone // "Europe/Berlin"' "$CONFIG_PATH")
 
 # Derive XMPP domain from PUBLIC_URL (strip scheme and trailing slash)
 XMPP_DOMAIN=$(echo "$PUBLIC_URL" | sed 's|https\?://||;s|/.*||')
 echo "XMPP_DOMAIN: $XMPP_DOMAIN"
+
+# ── Resolve JVB advertise address (supports hostname/DDNS or plain IP) ─────────
+JVB_ADVERTISE_IP=""
+if [ -n "$JVB_ADVERTISE_HOST" ]; then
+    # Try to resolve hostname to IP; fall back to using value as-is if it looks like an IP
+    RESOLVED=$(getent hosts "$JVB_ADVERTISE_HOST" 2>/dev/null | awk '{print $1}' | head -1)
+    if [ -n "$RESOLVED" ]; then
+        JVB_ADVERTISE_IP="$RESOLVED"
+        echo "JVB advertise: resolved $JVB_ADVERTISE_HOST -> $JVB_ADVERTISE_IP"
+    else
+        echo "WARNING: Could not resolve $JVB_ADVERTISE_HOST — JVB NAT traversal may not work for remote participants"
+    fi
+fi
 
 # ── Timezone ─────────────────────────────────────────────────────────────────
 if [ -f "/usr/share/zoneinfo/$TIMEZONE" ]; then
