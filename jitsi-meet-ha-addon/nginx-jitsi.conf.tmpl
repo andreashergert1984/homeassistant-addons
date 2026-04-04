@@ -5,6 +5,11 @@ server {
     root /usr/share/jitsi-meet;
     index index.html;
 
+    # Required: Jitsi's index.html uses SSI (<!--#include virtual="head.html"-->)
+    # to inject config.js, interface_config.js, utils.js, do_external_connect.js
+    ssi on;
+    ssi_types application/x-javascript application/javascript;
+
     # BOSH — XMPP over HTTP
     location = /http-bind {
         proxy_pass http://127.0.0.1:5280/http-bind;

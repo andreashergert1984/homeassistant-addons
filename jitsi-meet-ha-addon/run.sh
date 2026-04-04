@@ -123,6 +123,18 @@ JITSI_WEB_ROOT="${JITSI_WEB_ROOT:-/usr/share/jitsi-meet}"
 envsubst < /etc/jitsi/meet/config.js.tmpl > "${JITSI_WEB_ROOT}/config.js"
 echo "config.js written to ${JITSI_WEB_ROOT}/config.js"
 
+# ── head.html — inject critical scripts via SSI ───────────────────────────────
+# Jitsi's index.html uses <!--#include virtual="head.html"--> (SSI) to load
+# config.js, interface_config.js, utils.js and do_external_connect.js.
+# Without this the app renders a black page.
+cat > "${JITSI_WEB_ROOT}/head.html" <<'HEADHTML'
+<script src="config.js"></script>
+<script src="interface_config.js"></script>
+<script src="utils.js"></script>
+<script src="do_external_connect.js"></script>
+HEADHTML
+echo "head.html written."
+
 # ── Nginx site config ─────────────────────────────────────────────────────────
 # Remove default site, write Jitsi site
 rm -f /etc/nginx/conf.d/default.conf /etc/nginx/sites-enabled/default 2>/dev/null || true
