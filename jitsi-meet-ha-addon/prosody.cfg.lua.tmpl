@@ -17,16 +17,27 @@ modules_disabled = {}
 data_path = "/data/prosody"
 log = { info = "/data/logs/prosody.log" }
 
--- Disable certificate checking between internal components
+-- TLS: all connections come in already encrypted via Nginx Proxy Manager,
+-- so we treat BOSH and WebSocket connections as secure and do NOT require
+-- STARTTLS on the internal (plain HTTP/WS) path.
 consider_bosh_secure = true
 consider_websocket_secure = true
+cross_domain_bosh = true
+cross_domain_websocket = true
 
 -- Main virtual host
 VirtualHost "${XMPP_DOMAIN}"
     authentication = "${XMPP_AUTH}"
     ssl = { key = "/data/prosody/certs/${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/${XMPP_DOMAIN}.crt" }
+    -- CRITICAL: do not require STARTTLS on c2s — TLS is terminated by the
+    -- reverse proxy (Nginx Proxy Manager) before reaching this container.
+    c2s_require_encryption = false
+    -- Also mark this VirtualHost's BOSH/WS as secure at the host level
+    consider_bosh_secure = true
+    consider_websocket_secure = true
     modules_enabled = {
-        "bosh"; "websocket"; "smacks"; "carbons"; "blocklist"; "mam";
+        "bosh"; "websocket";
+        "ping"; "pubsub";
     }
 
 ${GUEST_VHOST_BLOCK}
@@ -52,11 +63,12 @@ Component "internal.auth.${XMPP_DOMAIN}" "muc"
     admins = { "focus@auth.${XMPP_DOMAIN}", "jvb@auth.${XMPP_DOMAIN}" }
     restrict_room_creation = true
 
--- TURN credentials service
-Component "turn.${XMPP_DOMAIN}" "turncredentials"
-    secret = "${TURN_SECRET}"
+-- TURN credentials service (optional, gracefully skipped if plugin missing)
+-- Component "turn.${XMPP_DOMAIN}" "turncredentials"
+--     secret = "${TURN_SECRET}"
 
 -- Authentication host (focus and jvb register here)
 VirtualHost "auth.${XMPP_DOMAIN}"
     ssl = { key = "/data/prosody/certs/auth.${XMPP_DOMAIN}.key", certificate = "/data/prosody/certs/auth.${XMPP_DOMAIN}.crt" }
     authentication = "internal_plain"
+    c2s_require_encryption = false
