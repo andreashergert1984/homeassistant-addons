@@ -1,0 +1,55 @@
+# Jitsi Video Bridge (JVB) configuration template
+# Generated from /data/options.json by run.sh
+
+videobridge {
+  http-servers {
+    public {
+      port = 9090
+    }
+    private {
+      port = 8080
+    }
+  }
+
+  websockets {
+    enabled = true
+    domain = "${XMPP_DOMAIN}:443"
+    tls = true
+  }
+
+  // The XMPP component connection to Prosody
+  apis {
+    xmpp-client {
+      configs {
+        shard-1 {
+          hostname = "127.0.0.1"
+          port = 5222
+          domain = "auth.${XMPP_DOMAIN}"
+          username = "jvb"
+          password = "${JVB_AUTH_PASSWORD}"
+          muc-jids = "jvbbrewery@internal.auth.${XMPP_DOMAIN}"
+          muc-nickname = "jvb-1"
+          disable-certificate-verification = true
+        }
+      }
+    }
+  }
+
+  // ICE / media transport
+  ice {
+    tcp {
+      enabled = true
+      port = 4443
+    }
+    udp {
+      port = 10000
+    }
+  }
+
+  stats {
+    enabled = true
+    transports = [
+      { type = "muc" }
+    ]
+  }
+}

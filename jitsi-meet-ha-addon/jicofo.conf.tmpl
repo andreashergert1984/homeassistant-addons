@@ -1,0 +1,37 @@
+# Jicofo configuration template for Jitsi Meet HA add-on
+# Generated from /data/options.json by run.sh
+
+jicofo {
+  // XMPP client connection — Jicofo signs in as focus@auth.domain
+  xmpp {
+    client {
+      enabled = true
+      hostname = "127.0.0.1"
+      port = 5222
+      domain = "auth.${XMPP_DOMAIN}"
+      xmpp-domain = "${XMPP_DOMAIN}"
+      username = "focus"
+      password = "${JICOFO_AUTH_PASSWORD}"
+      use-tls = false
+      disable-certificate-verification = true
+    }
+
+    // Service (component) connection — makes Jicofo appear at focus.domain
+    // so browser IQ stanzas to focus.domain are handled by Jicofo
+    service {
+      hostname = "127.0.0.1"
+      port = 5347
+      password = "${JICOFO_COMPONENT_SECRET}"
+    }
+  }
+
+  // Bridge brewery MUC — JVB instances announce themselves here
+  bridge {
+    brewery-jid = "jvbbrewery@internal.auth.${XMPP_DOMAIN}"
+  }
+
+  // REST API for health checks
+  rest {
+    port = 8888
+  }
+}
