@@ -7,6 +7,16 @@ Runs the upstream [Yuvomi](https://github.com/ulsklyc/yuvomi) image unchanged.
 1. Start the add-on and open `http://<ha-ip>:3000`.
 2. Create the admin account in the setup screen.
 
+## Pantry terminal (sidebar "Vorrat")
+
+A scan page for the pantry, meant for a phone or tablet on the wall.
+
+1. In Yuvomi: Settings, Household, API access, create a token with scope `pantry:write`.
+2. Paste it into the add-on option **API token** and restart the add-on.
+3. Open "Vorrat" in the HA sidebar (needs HTTPS for the camera).
+
+Modes: **Auslagern** (each scan takes 1, earliest expiry first, with undo), **Einlagern** (quantity, best-before date, location), **Zählen** (set the real stock). Scan with the camera or with a keyboard-wedge scanner (USB, PS/2 via adapter). Items without a barcode go on tiles ("Ohne Code"). Unknown barcodes are asked once; the name is suggested from Open Food Facts (switch off with the option, then no code leaves your network). The mapping barcode to article is kept in `/data/terminal.json`.
+
 ## Data
 
 | What | Where |
@@ -28,4 +38,4 @@ to `1`.
 ## Updates
 
 The add-on version equals the pinned upstream image tag. Bump `version` in
-`config.yaml` and the tags in `build.yaml` together.
+`config.yaml` (`<upstream>-<n>` for add-on only changes) and the tags in `build.yaml` together.

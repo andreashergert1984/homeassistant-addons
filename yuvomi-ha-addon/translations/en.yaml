@@ -11,6 +11,12 @@ configuration:
   trust_proxy:
     name: Trust proxy
     description: "1 behind one reverse proxy, loopback for direct access."
+  api_token:
+    name: Pantry terminal API token
+    description: Token from Yuvomi (Settings, Household, API access) with scope pantry:write. Needed for the Vorrat sidebar panel.
+  lookup_openfoodfacts:
+    name: Look up barcodes at Open Food Facts
+    description: Unknown barcodes are sent to openfoodfacts.org to suggest a product name.
   weather_city:
     name: Weather city
     description: Optional, shown on the dashboard.

@@ -45,5 +45,13 @@ export WEATHER_LAT="$(opt weather_lat)"
 export WEATHER_LON="$(opt weather_lon)"
 export WEATHER_UNITS="$(opt weather_units)"
 
+# Pantry terminal (scan page for ingress), restarted if it ever exits.
+chown node:node /data
+export TERMINAL_PORT=8099
+export YUVOMI_URL=http://127.0.0.1:3000
+export YUVOMI_API_TOKEN="$(opt api_token)"
+export OFF_LOOKUP="$(opt lookup_openfoodfacts)"
+( while true; do gosu node node /terminal/server.js; sleep 3; done ) &
+
 echo "[yuvomi] Starting (data: /data, backups: $BACKUP_DIR, documents: $DOCUMENT_STORAGE_LOCAL_PATH)"
 exec /entrypoint.sh "$@"

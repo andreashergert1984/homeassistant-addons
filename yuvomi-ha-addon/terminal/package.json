@@ -1,0 +1,9 @@
+{
+  "name": "yuvomi-pantry-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zxing/library": "0.21.3"
+  }
+}

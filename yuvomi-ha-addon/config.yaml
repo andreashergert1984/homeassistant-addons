@@ -1,6 +1,6 @@
 ---
 name: Yuvomi Family Planner
-version: "2.79.0"
+version: "2.79.0-1"
 slug: yuvomi
 description: >-
   Self-hosted family planner: tasks, calendar, budget, meals, shopping, health
@@ -17,6 +17,10 @@ ports:
 ports_description:
   3000/tcp: Yuvomi web interface
 
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:barcode-scan
+panel_title: Vorrat
 webui: "[PROTO:ssl]://[HOST]:[PORT:3000]"
 watchdog: "http://[HOST]:[PORT:3000]/health"
 
@@ -28,6 +32,10 @@ options:
   session_secure: false
   # 1 = one reverse proxy in front, loopback = direct access without proxy
   trust_proxy: loopback
+  # API token of Yuvomi (Settings > Household > API access), scope pantry:write.
+  api_token: ""
+  # Look up unknown barcodes at Open Food Facts (sends the code to openfoodfacts.org)
+  lookup_openfoodfacts: true
   weather_city: ""
   weather_lat: ""
   weather_lon: ""
@@ -38,6 +46,8 @@ schema:
   log_level: list(error|warn|info|debug)
   session_secure: bool
   trust_proxy: str
+  api_token: password?
+  lookup_openfoodfacts: bool
   weather_city: str?
   weather_lat: str?
   weather_lon: str?

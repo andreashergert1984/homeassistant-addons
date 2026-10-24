@@ -7,6 +7,9 @@ LABEL \
     io.hass.type="addon" \
     maintainer="Andreas Hergert <andreashergert1984@googlemail.com>"
 
+COPY terminal /terminal
+RUN cd /terminal && npm install --omit=dev --no-audit --no-fund && chown -R node:node /terminal
+
 COPY run.sh /run-addon.sh
 RUN chmod +x /run-addon.sh
 

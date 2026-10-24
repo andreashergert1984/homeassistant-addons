@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vorrat Terminal</title>
+<style>
+:root { --bg:#14161a; --card:#1f2329; --fg:#f2f4f7; --mut:#9aa3af; --out:#e5732f; --in:#2fae6b; --cnt:#3b82f6; --err:#e5484d; --line:#2e343c; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:17px/1.35 system-ui, sans-serif; }
+body { display:flex; flex-direction:column; user-select:none; }
+header { display:flex; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); background:var(--card); }
+.mode { flex:1; padding:16px 4px; border:0; border-radius:12px; background:#2a3037; color:var(--mut); font:700 18px system-ui; }
+.mode.on[data-m=out] { background:var(--out); color:#fff; }
+.mode.on[data-m=in] { background:var(--in); color:#fff; }
+.mode.on[data-m=count] { background:var(--cnt); color:#fff; }
+#cam { position:relative; background:#000; height:34vh; min-height:150px; overflow:hidden; }
+#cam video { width:100%; height:100%; object-fit:cover; }
+#cam .frame { position:absolute; inset:18% 12%; border:3px solid rgba(255,255,255,.55); border-radius:14px; pointer-events:none; }
+#camoff { position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--mut); }
+#status { padding:14px 16px; font-size:20px; font-weight:600; min-height:64px; border-bottom:1px solid var(--line); }
+#status.ok { background:#16382a; } #status.warn { background:#3d2a14; } #status.bad { background:#401a1c; }
+#status small { display:block; font-weight:400; color:var(--mut); font-size:15px; }
+#undo { float:right; padding:10px 16px; border:0; border-radius:10px; background:#2a3037; color:var(--fg); font:600 16px system-ui; display:none; }
+main { flex:1; overflow:auto; padding:12px; }
+h3 { margin:6px 2px 8px; font-size:14px; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; font-weight:600; display:flex; justify-content:space-between; }
+#tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+.tile { position:relative; padding:16px 8px; min-height:64px; border:0; border-radius:12px; background:var(--card); color:var(--fg); font:600 16px system-ui; }
+.tile .x { position:absolute; top:2px; right:6px; color:var(--err); font-size:22px; display:none; }
+body.edit .tile .x { display:block; }
+.link { background:none; border:0; color:var(--mut); font:600 14px system-ui; padding:4px 6px; }
+.sheet-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:9; }
+.sheet-bg.on { display:flex; }
+.sheet { width:100%; max-height:92vh; overflow:auto; background:var(--card); border-radius:20px 20px 0 0; padding:16px; padding-bottom:max(16px, env(safe-area-inset-bottom)); }
+.sheet h2 { margin:0 0 4px; font-size:22px; }
+.sheet .sub { color:var(--mut); margin-bottom:12px; }
+label { display:block; margin:10px 0 4px; color:var(--mut); font-size:14px; }
+input, select { width:100%; padding:14px; border-radius:10px; border:1px solid var(--line); background:#101318; color:var(--fg); font:18px system-ui; user-select:text; }
+.row { display:flex; gap:8px; align-items:center; }
+.step { width:56px; height:56px; border:0; border-radius:12px; background:#2a3037; color:var(--fg); font:700 28px system-ui; }
+#qty, #cnt { text-align:center; font-weight:700; font-size:26px; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; }
+.chip { padding:12px 14px; border:1px solid var(--line); border-radius:999px; background:#101318; color:var(--fg); font:600 15px system-ui; }
+.chip.on { background:var(--in); border-color:var(--in); }
+.actions { display:flex; gap:8px; margin-top:16px; }
+.btn { flex:1; padding:18px; border:0; border-radius:12px; font:700 19px system-ui; color:#fff; background:#2a3037; }
+.btn.go { background:var(--in); } .btn.cnt { background:var(--cnt); }
+#kbd { position:fixed; left:-1000px; top:0; opacity:0; }
+</style>
+</head>
+<body>
+<header>
+  <button class="mode on" data-m="out">Auslagern</button>
+  <button class="mode" data-m="in">Einlagern</button>
+  <button class="mode" data-m="count">Zählen</button>
+</header>
+<div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div></div>
+<div id="status"><button id="undo">Rückgängig</button><span id="msg">Bereit. Code vor die Kamera halten.</span></div>
+<main>
+  <h3><span>Ohne Code</span><span><button class="link" id="editTiles">Bearbeiten</button><button class="link" id="addTile">+ Neu</button></span></h3>
+  <div id="tiles"></div>
+</main>
+
+<div class="sheet-bg" id="sheetBg"><div class="sheet" id="sheet"></div></div>
+<input id="kbd" aria-hidden="true" tabindex="-1">
+
+<script>
+const $ = (s) => document.querySelector(s);
+const UNITS = { pcs:'Stück', g:'g', kg:'kg', ml:'ml', l:'l', pkg:'Packung', can:'Dose', bottle:'Flasche', jar:'Glas', bag:'Beutel' };
+const IDLE_BACK_MS = 3 * 60 * 1000;
+let mode = 'out', boot = null, busy = false, last = { code: '', t: 0 }, lastUndo = null, idleTimer = null;
+
+// ---------- feedback ----------
+let actx;
+function beep(f, ms) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = f; g.gain.value = 0.15; o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + ms / 1000);
+  } catch {}
+}
+const good = () => { beep(880, 90); navigator.vibrate && navigator.vibrate(40); };
+const bad = () => { beep(220, 300); navigator.vibrate && navigator.vibrate([80, 60, 80]); };
+function say(text, sub, cls, undoId) {
+  const s = $('#status'); s.className = cls || '';
+  $('#msg').innerHTML = '';
+  const b = document.createElement('b'); b.textContent = text; $('#msg').append(b);
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; $('#msg').append(sm); }
+  lastUndo = undoId || null;
+  $('#undo').style.display = undoId ? 'block' : 'none';
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+async function api(path, body) {
+  const r = await fetch('api/' + path, body ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('Fehler ' + r.status));
+  return j;
+}
+
+// ---------- modes ----------
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  say({ out:'Auslagern', in:'Einlagern', count:'Zählen' }[m] + ': Code scannen', '', '');
+  armIdle();
+}
+function armIdle() {
+  clearTimeout(idleTimer);
+  if (mode !== 'out') idleTimer = setTimeout(() => setMode('out'), IDLE_BACK_MS);
+}
+document.querySelectorAll('.mode').forEach((b) => b.onclick = () => { setMode(b.dataset.m); b.blur(); });
+$('#undo').onclick = async () => {
+  if (!lastUndo) return;
+  try { await api('undo', { id: lastUndo }); say('Rückgängig gemacht', '', 'warn'); good(); }
+  catch (e) { say(e.message, '', 'bad'); bad(); }
+};
+
+// ---------- scan handling ----------
+async function onCode(code) {
+  if (busy) return;
+  busy = true; armIdle();
+  try {
+    const info = await api('lookup?key=' + encodeURIComponent(code));
+    let prod = info.product;
+    if (!prod) {
+      prod = await productSheet({ key: code, name: info.suggestion?.name || '', isNew: true, found: !!info.suggestion });
+      if (!prod) { say('Abgebrochen', '', 'warn'); return; }
+      info.stock = { total: 0, batches: [] };
+    }
+    if (mode === 'out') {
+      const r = await api('out', { key: prod.key, quantity: 1 });
+      if (!r.ok) { say(r.message, '', 'bad'); bad(); return; }
+      say(r.message, `Noch ${r.total} im Bestand`, r.total === 0 ? 'warn' : 'ok', r.id);
+      good();
+    } else if (mode === 'in') {
+      await inSheet(prod, info.stock);
+    } else {
+      await countSheet(prod, info.stock);
+    }
+  } catch (e) { say(e.message, '', 'bad'); bad(); }
+  finally { busy = false; }
+}
+function trigger(code, force) {
+  const now = Date.now();
+  if (!force && code === last.code && now - last.t < 2500) { last.t = now; return; }
+  last = { code, t: now };
+  onCode(code);
+}
+
+// ---------- sheets ----------
+function openSheet(html) {
+  $('#sheet').innerHTML = html;
+  $('#sheetBg').classList.add('on');
+  return new Promise((resolve) => { $('#sheet')._close = (v) => { $('#sheetBg').classList.remove('on'); resolve(v); }; });
+}
+const closeSheet = (v) => $('#sheet')._close && $('#sheet')._close(v);
+$('#sheetBg').onclick = (e) => { if (e.target.id === 'sheetBg') closeSheet(null); };
+function locOptions(sel) {
+  return '<option value="">(kein Lagerort)</option>' + boot.locations.map((l) => `<option value="${l.id}" ${String(sel) === String(l.id) ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+}
+function unitOptions(sel) { return Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${v}</option>`).join(''); }
+
+async function productSheet({ key, name, isNew, found, tile }) {
+  const title = tile ? 'Neue Kachel' : 'Neuer Artikel';
+  const sub = tile ? 'Für Dinge ohne Barcode.' : `Code ${esc(key)}${found ? ' (Name aus Open Food Facts, bitte prüfen)' : ' ist noch unbekannt'}`;
+  const p = openSheet(`<h2>${title}</h2><div class="sub">${sub}</div>
+    <label>Name</label><input id="pn" value="${esc(name)}" maxlength="120">
+    <div class="row"><div style="flex:1"><label>Einheit</label><select id="pu">${unitOptions('pcs')}</select></div>
+    <div style="flex:1"><label>Lagerort</label><select id="pl">${locOptions('')}</select></div></div>
+    <label>Kategorie</label><select id="pc"><option value="">(automatisch)</option>${boot.categories.map((c) => `<option>${esc(c)}</option>`).join('')}</select>
+    <div class="actions"><button class="btn" id="no">Abbrechen</button><button class="btn go" id="ok">Speichern</button></div>`);
+  $('#no').onclick = () => closeSheet(null);
+  $('#ok').onclick = async () => {
+    const body = { key, name: $('#pn').value, unit: $('#pu').value, location_id: $('#pl').value, category: $('#pc').value };
+    if (!body.name.trim()) { $('#pn').focus(); return; }
+    try {
+      const r = tile ? await api('tiles', body) : await api('product', body);
+      closeSheet(tile ? r.tile : r.product);
+    } catch (e) { say(e.message, '', 'bad'); bad(); closeSheet(null); }
+  };
+  if (!found) setTimeout(() => $('#pn').focus(), 100);
+  return p;
+}
+
+function plusDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+const CHIPS = [['1 Woche',7],['2 Wochen',14],['1 Monat',30],['3 Monate',91],['6 Monate',182],['1 Jahr',365],['2 Jahre',730]];
+
+async function inSheet(prod, stock) {
+  let qty = 1, exp = prod.shelf_days != null ? plusDays(prod.shelf_days) : '';
+  const chips = (prod.shelf_days != null ? [[`Wie zuletzt (+${prod.shelf_days} T)`, prod.shelf_days]] : []).concat(CHIPS);
+  const p = openSheet(`<h2>Einlagern</h2><div class="sub">${esc(prod.name)} · jetzt ${stock.total} ${UNITS[prod.unit] || ''}</div>
+    <label>Menge</label><div class="row"><button class="step" id="m">−</button><input id="qty" inputmode="decimal" value="1"><button class="step" id="pl">+</button></div>
+    <label>Haltbar bis</label><div class="chips" id="chips">${chips.map(([t, d], i) => `<button class="chip ${i === 0 && prod.shelf_days != null ? 'on' : ''}" data-d="${d}">${esc(t)}</button>`).join('')}<button class="chip" data-d="">ohne MHD</button></div>
+    <input id="exp" type="date" value="${exp}" style="margin-top:8px">
+    <label>Lagerort</label><select id="loc">${locOptions(prod.location_id ?? '')}</select>
+    <div class="actions"><button class="btn" id="no">Abbrechen</button><button class="btn go" id="ok">Einlagern</button></div>`);
+  const q = $('#qty');
+  $('#m').onclick = () => { q.value = Math.max(1, (Number(q.value) || 1) - 1); };
+  $('#pl').onclick = () => { q.value = (Number(q.value) || 0) + 1; };
+  $('#chips').onclick = (e) => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    document.querySelectorAll('#chips .chip').forEach((x) => x.classList.toggle('on', x === c));
+    $('#exp').value = c.dataset.d === '' ? '' : plusDays(Number(c.dataset.d));
+  };
+  $('#exp').onchange = () => document.querySelectorAll('#chips .chip').forEach((x) => x.classList.remove('on'));
+  $('#no').onclick = () => closeSheet(null);
+  $('#ok').onclick = async () => {
+    try {
+      const r = await api('in', { key: prod.key, quantity: Number(q.value) || 1, expires_on: $('#exp').value || null, location_id: $('#loc').value || null });
+      closeSheet(true);
+      say(r.message, `Jetzt ${r.total} im Bestand`, 'ok', r.id); good();
+    } catch (e) { closeSheet(null); say(e.message, '', 'bad'); bad(); }
+  };
+  await p;
+}
+
+async function countSheet(prod, stock) {
+  const p = openSheet(`<h2>Zählen</h2><div class="sub">${esc(prod.name)} · im System: ${stock.total} ${UNITS[prod.unit] || ''}</div>
+    <label>Tatsächlich vorhanden</label><div class="row"><button class="step" id="m">−</button><input id="cnt" inputmode="decimal" value="${stock.total}"><button class="step" id="pl">+</button></div>
+    <div class="actions"><button class="btn" id="no">Abbrechen</button><button class="btn cnt" id="ok">Setzen</button></div>`);
+  const c = $('#cnt');
+  $('#m').onclick = () => { c.value = Math.max(0, (Number(c.value) || 0) - 1); };
+  $('#pl').onclick = () => { c.value = (Number(c.value) || 0) + 1; };
+  $('#no').onclick = () => closeSheet(null);
+  $('#ok').onclick = async () => {
+    try {
+      const r = await api('count', { key: prod.key, total: Number(c.value) });
+      closeSheet(true); say(r.message, '', 'ok', r.id); good();
+    } catch (e) { closeSheet(null); say(e.message, '', 'bad'); bad(); }
+  };
+  await p;
+}
+
+// ---------- tiles ----------
+function renderTiles() {
+  $('#tiles').innerHTML = boot.tiles.map((t) => `<button class="tile" data-id="${t.id}">${esc(t.name)}<span class="x" data-del="${t.id}">×</span></button>`).join('') || '<div style="color:var(--mut)">Noch keine. Mit "+ Neu" lassen sich Dinge ohne Barcode anlegen, z. B. Selbsteingekochtes.</div>';
+}
+$('#tiles').onclick = async (e) => {
+  const del = e.target.closest('[data-del]');
+  if (del) { if (confirm('Kachel löschen?')) { await api('tiles/delete', { id: Number(del.dataset.del) }); boot.tiles = boot.tiles.filter((t) => t.id !== Number(del.dataset.del)); renderTiles(); } return; }
+  const t = e.target.closest('.tile'); if (t) trigger('tile:' + t.dataset.id, true);
+};
+$('#editTiles').onclick = () => document.body.classList.toggle('edit');
+$('#addTile').onclick = async () => {
+  const t = await productSheet({ key: 'tile', name: '', tile: true });
+  if (t) { boot.tiles.push(t); renderTiles(); }
+};
+
+// ---------- keyboard wedge (PS/2 scanner etc.) ----------
+let buf = '', bufT = 0, bufTimer = null;
+document.addEventListener('keydown', (e) => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'Enter') { if (buf) e.preventDefault(); flushBuf(); return; }
+  if (e.key.length !== 1 || !/[0-9]/.test(e.key)) return;
+  const now = Date.now();
+  if (now - bufT > 400) buf = '';
+  buf += e.key; bufT = now;
+  clearTimeout(bufTimer); bufTimer = setTimeout(flushBuf, 150);
+});
+function flushBuf() {
+  clearTimeout(bufTimer);
+  if (/^\d{8,14}$/.test(buf)) trigger(buf, true);
+  buf = '';
+}
+
+// ---------- camera ----------
+async function startCamera() {
+  const v = $('#v'), off = $('#camoff');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+    v.srcObject = stream; await v.play();
+  } catch (e) {
+    off.style.display = 'flex'; off.textContent = 'Keine Kamera verfügbar (' + (e.name || e.message) + '). Ein Tastatur-Scanner funktioniert trotzdem.';
+    return;
+  }
+  const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+  if ('BarcodeDetector' in window) {
+    let det;
+    try { const sup = await BarcodeDetector.getSupportedFormats(); det = new BarcodeDetector({ formats: formats.filter((f) => sup.includes(f)) }); } catch {}
+    if (det) {
+      const loop = async () => {
+        if (!busy && !$('#sheetBg').classList.contains('on') && v.readyState >= 2) {
+          try { const r = await det.detect(v); if (r.length) trigger(r[0].rawValue); } catch {}
+        }
+        setTimeout(loop, 160);
+      };
+      loop(); return;
+    }
+  }
+  // fallback: ZXing
+  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/zxing.js'; s.onload = res; s.onerror = rej; document.head.append(s); });
+  const hints = new Map([[ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]]]);
+  const reader = new ZXing.BrowserMultiFormatReader(hints);
+  const c = document.createElement('canvas'), ctx = c.getContext('2d', { willReadFrequently: true });
+  const loop = () => {
+    if (!busy && !$('#sheetBg').classList.contains('on') && v.videoWidth) {
+      c.width = v.videoWidth; c.height = v.videoHeight; ctx.drawImage(v, 0, 0);
+      try { trigger(reader.decodeFromCanvas(c).getText()); } catch {}
+    }
+    setTimeout(loop, 200);
+  };
+  loop();
+}
+
+// ---------- start ----------
+async function wake() { try { if (navigator.wakeLock) { await navigator.wakeLock.request('screen'); } } catch {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
+(async () => {
+  wake();
+  try {
+    boot = await api('boot');
+  } catch (e) {
+    say(e.message, 'Add-on-Optionen prüfen: api_token', 'bad'); return;
+  }
+  renderTiles(); setMode('out'); startCamera();
+})();
+</script>
+</body>
+</html>
