@@ -1,0 +1,50 @@
+---
+name: Yuvomi Family Planner
+version: "2.79.0"
+slug: yuvomi
+description: >-
+  Self-hosted family planner: tasks, calendar, budget, meals, shopping, health
+  and more in one PWA. Runs the unmodified upstream Yuvomi image.
+url: https://github.com/ulsklyc/yuvomi
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: Yuvomi web interface
+
+webui: "[PROTO:ssl]://[HOST]:[PORT:3000]"
+watchdog: "http://[HOST]:[PORT:3000]/health"
+
+options:
+  timezone: Europe/Berlin
+  log_level: info
+  # false: plain HTTP access (http://<ha-ip>:3000)
+  # true: only behind an HTTPS reverse proxy, otherwise login cookies are dropped
+  session_secure: false
+  # 1 = one reverse proxy in front, loopback = direct access without proxy
+  trust_proxy: loopback
+  weather_city: ""
+  weather_lat: ""
+  weather_lon: ""
+  weather_units: metric
+
+schema:
+  timezone: str
+  log_level: list(error|warn|info|debug)
+  session_secure: bool
+  trust_proxy: str
+  weather_city: str?
+  weather_lat: str?
+  weather_lon: str?
+  weather_units: list(metric|imperial)
+
+map:
+  - type: data
+    read_only: false
+  - type: share
+    read_only: false

@@ -1,0 +1,27 @@
+configuration:
+  timezone:
+    name: Timezone
+    description: Container timezone, e.g. Europe/Berlin. Default for the household timezone.
+  log_level:
+    name: Log level
+    description: Verbosity of the application log.
+  session_secure:
+    name: Secure cookies
+    description: Enable only when Yuvomi is reached over HTTPS (reverse proxy). Plain http://ip:3000 needs this off.
+  trust_proxy:
+    name: Trust proxy
+    description: "1 behind one reverse proxy, loopback for direct access."
+  weather_city:
+    name: Weather city
+    description: Optional, shown on the dashboard.
+  weather_lat:
+    name: Weather latitude
+    description: Optional.
+  weather_lon:
+    name: Weather longitude
+    description: Optional.
+  weather_units:
+    name: Weather units
+    description: metric or imperial.
+network:
+  3000/tcp: Yuvomi web interface
