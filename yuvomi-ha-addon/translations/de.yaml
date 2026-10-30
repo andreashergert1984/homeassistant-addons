@@ -1,0 +1,33 @@
+configuration:
+  timezone:
+    name: Zeitzone
+    description: Zeitzone des Containers, z. B. Europe/Berlin. Vorgabe für die Zeitzone des Haushalts.
+  log_level:
+    name: Log-Level
+    description: Ausführlichkeit des Anwendungslogs.
+  session_secure:
+    name: Sichere Cookies
+    description: Nur einschalten, wenn Yuvomi über HTTPS (Reverse Proxy) erreicht wird. Für http://ip:3000 aus lassen.
+  trust_proxy:
+    name: Proxy vertrauen
+    description: "1 hinter einem Reverse Proxy, loopback bei direktem Zugriff."
+  api_token:
+    name: API-Token für das Vorrats-Terminal
+    description: Token aus Yuvomi (Einstellungen, Haushalt, API-Zugriff), nur Vorrat schreiben, kein Ablauf. Nötig für "Vorrat" in der Seitenleiste; siehe Dokumentation.
+  lookup_openfoodfacts:
+    name: Barcodes bei Open Food Facts nachschlagen
+    description: Unbekannte Barcodes werden an openfoodfacts.org geschickt, um einen Produktnamen vorzuschlagen.
+  weather_city:
+    name: Wetter-Ort
+    description: Optional, wird auf dem Dashboard angezeigt.
+  weather_lat:
+    name: Wetter-Breitengrad
+    description: Optional.
+  weather_lon:
+    name: Wetter-Längengrad
+    description: Optional.
+  weather_units:
+    name: Wetter-Einheiten
+    description: metric oder imperial.
+network:
+  3000/tcp: Yuvomi-Weboberfläche
