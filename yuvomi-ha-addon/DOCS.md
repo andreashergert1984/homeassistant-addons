@@ -40,4 +40,4 @@ to `1`.
 ## Updates
 
 The add-on version equals the pinned upstream image tag. Bump `version` in
-`config.yaml` (`<upstream>-<n>` for add-on only changes) and the tags in `build.yaml` together.
+`config.yaml` (`<upstream>.<n>` for add-on only changes; not `-<n>`, HA reads that as a pre-release older than `<upstream>`) and the tags in `build.yaml` together.
