@@ -121,14 +121,18 @@ async function opIn({ key, quantity, expires_on, location_id }) {
   return { id: remember(op), message: `+${q} ${prod.name}`, total: after };
 }
 
-async function opOut({ key, quantity }) {
+// Takes from the chosen batch first (batch_id), otherwise first to expire first.
+async function opOut({ key, quantity, batch_id }) {
   const prod = resolve(key);
   if (!prod) throw Object.assign(new Error('Artikel unbekannt.'), { status: 404 });
   let need = Number(quantity) || 1;
   const { data: items } = await pantry();
   const list = fefo(batchesOf(items, prod).filter((i) => Number(i.quantity) > 0));
   if (!list.length) return { ok: false, message: `${prod.name}: nicht im Bestand`, total: 0 };
-  const touched = [];
+  const chosen = list.findIndex((b) => b.id === Number(batch_id));
+  if (chosen > 0) list.unshift(...list.splice(chosen, 1));
+  const before = list.map((b) => ({ id: b.id, q: Number(b.quantity), exp: b.expires_on }));
+  const touched = [], taken = [];
   for (const b of list) {
     if (need <= 0) break;
     const take = Math.min(need, Number(b.quantity));
@@ -141,10 +145,14 @@ async function opOut({ key, quantity }) {
       await yv('PATCH', '/pantry/' + b.id, { quantity: left });
       touched.push({ item: b, before: Number(b.quantity) });
     }
+    taken.push({ q: take, exp: b.expires_on });
     need -= take;
   }
   const after = total(batchesOf((await pantry()).data, prod));
-  return { ok: true, id: remember({ type: 'out', touched }), message: `-${Number(quantity) || 1} ${prod.name}`, total: after, short: need > 0 ? need : 0 };
+  return {
+    ok: true, id: remember({ type: 'out', touched, key }), message: `-${total(taken.map((x) => ({ quantity: x.q })))} ${prod.name}`,
+    total: after, short: need > 0 ? need : 0, taken, before,
+  };
 }
 
 async function opCount({ key, total: target }) {
@@ -169,9 +177,11 @@ async function opCount({ key, total: target }) {
   return { ...r, message: `${prod.name}: ${cur} → ${t}` };
 }
 
+// remap: a batch that was emptied and deleted comes back under a new id.
 async function opUndo(id) {
   const op = ops.get(Number(id));
   if (!op) throw Object.assign(new Error('Nicht mehr rückgängig zu machen.'), { status: 404 });
+  const remap = {};
   if (op.type === 'in') {
     if (op.created) await yv('DELETE', '/pantry/' + op.created).catch(() => {});
     else await yv('PATCH', '/pantry/' + op.patched.id, { quantity: op.patched.before });
@@ -179,14 +189,23 @@ async function opUndo(id) {
     for (const t of op.touched) {
       if (t.deleted) {
         const b = t.item;
-        await yv('POST', '/pantry', { name: b.name, unit: b.unit, quantity: Number(b.quantity), expires_on: b.expires_on, location_id: b.location_id, category: b.category, min_quantity: b.min_quantity, notes: b.notes });
+        const { data } = await yv('POST', '/pantry', { name: b.name, unit: b.unit, quantity: Number(b.quantity), expires_on: b.expires_on, location_id: b.location_id, category: b.category, min_quantity: b.min_quantity, notes: b.notes });
+        remap[b.id] = data.id;
       } else {
         await yv('PATCH', '/pantry/' + t.item.id, { quantity: t.before });
       }
     }
   }
   ops.delete(op.id);
-  return { ok: true };
+  return { ok: true, remap };
+}
+
+// Books a taken-out scan again with another quantity or batch.
+async function opCorrect({ id, quantity, batch_id }) {
+  const op = ops.get(Number(id));
+  if (!op || op.type !== 'out' || !op.key) throw Object.assign(new Error('Nicht mehr zu ändern.'), { status: 404 });
+  const { remap } = await opUndo(id);
+  return opOut({ key: op.key, quantity, batch_id: remap[batch_id] ?? batch_id });
 }
 
 // ---------- HTTP ----------
@@ -259,6 +278,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST' && p === '/api/out') return send(res, 200, await opOut(body));
       if (req.method === 'POST' && p === '/api/count') return send(res, 200, await opCount(body));
       if (req.method === 'POST' && p === '/api/undo') return send(res, 200, await opUndo(body.id));
+      if (req.method === 'POST' && p === '/api/correct') return send(res, 200, await opCorrect(body));
       return send(res, 404, { error: 'not found' });
     }
 

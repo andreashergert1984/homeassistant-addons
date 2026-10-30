@@ -21,7 +21,11 @@ header { display:flex; gap:8px; padding:10px; padding-top:max(10px, env(safe-are
 #status { padding:14px 16px; font-size:20px; font-weight:600; min-height:64px; border-bottom:1px solid var(--line); }
 #status.ok { background:#16382a; } #status.warn { background:#3d2a14; } #status.bad { background:#401a1c; }
 #status small { display:block; font-weight:400; color:var(--mut); font-size:15px; }
-#undo { float:right; padding:10px 16px; border:0; border-radius:10px; background:#2a3037; color:var(--fg); font:600 16px system-ui; display:none; }
+#acts { float:right; display:flex; gap:8px; margin-left:8px; }
+#acts button { padding:10px 16px; border:0; border-radius:10px; background:#2a3037; color:var(--fg); font:600 16px system-ui; display:none; }
+.batch { display:flex; justify-content:space-between; width:100%; margin-top:8px; padding:14px; border:1px solid var(--line); border-radius:12px; background:#101318; color:var(--fg); font:600 16px system-ui; text-align:left; }
+.batch.on { background:var(--out); border-color:var(--out); color:#fff; }
+.btn.out { background:var(--out); }
 main { flex:1; overflow:auto; padding:12px; }
 h3 { margin:6px 2px 8px; font-size:14px; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; font-weight:600; display:flex; justify-content:space-between; }
 #tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
@@ -55,7 +59,7 @@ input, select { width:100%; padding:14px; border-radius:10px; border:1px solid v
   <button class="mode" data-m="count">Zählen</button>
 </header>
 <div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div></div>
-<div id="status"><button id="undo">Rückgängig</button><span id="msg">Bereit. Code vor die Kamera halten.</span></div>
+<div id="status"><span id="acts"><button id="change">Ändern</button><button id="undo">Rückgängig</button></span><span id="msg">Bereit. Code vor die Kamera halten.</span></div>
 <main>
   <h3><span>Ohne Code</span><span><button class="link" id="editTiles">Bearbeiten</button><button class="link" id="addTile">+ Neu</button></span></h3>
   <div id="tiles"></div>
@@ -68,7 +72,7 @@ input, select { width:100%; padding:14px; border-radius:10px; border:1px solid v
 const $ = (s) => document.querySelector(s);
 const UNITS = { pcs:'Stück', g:'g', kg:'kg', ml:'ml', l:'l', pkg:'Packung', can:'Dose', bottle:'Flasche', jar:'Glas', bag:'Beutel' };
 const IDLE_BACK_MS = 3 * 60 * 1000;
-let mode = 'out', boot = null, busy = false, last = { code: '', t: 0 }, lastUndo = null, idleTimer = null;
+let mode = 'out', boot = null, busy = false, last = { code: '', t: 0 }, lastUndo = null, lastOut = null, idleTimer = null;
 
 // ---------- feedback ----------
 let actx;
@@ -82,13 +86,23 @@ function beep(f, ms) {
 }
 const good = () => { beep(880, 90); navigator.vibrate && navigator.vibrate(40); };
 const bad = () => { beep(220, 300); navigator.vibrate && navigator.vibrate([80, 60, 80]); };
-function say(text, sub, cls, undoId) {
+function say(text, sub, cls, undoId, out) {
   const s = $('#status'); s.className = cls || '';
   $('#msg').innerHTML = '';
   const b = document.createElement('b'); b.textContent = text; $('#msg').append(b);
   if (sub) { const sm = document.createElement('small'); sm.textContent = sub; $('#msg').append(sm); }
   lastUndo = undoId || null;
+  lastOut = out || null;
   $('#undo').style.display = undoId ? 'block' : 'none';
+  $('#change').style.display = out ? 'block' : 'none';
+}
+const fmtExp = (iso) => iso ? iso.split('-').reverse().join('.') : 'ohne MHD';
+function sayOut(r, prod) {
+  if (!r.ok) { say(r.message, '', 'bad'); bad(); return; }
+  const from = r.taken.map((x) => (r.taken.length > 1 ? x.q + ' aus ' : 'aus ') + fmtExp(x.exp)).join(', ');
+  const short = r.short ? ` · ${r.short} fehlten im Bestand` : '';
+  say(r.message, `${from} · noch ${r.total} im Bestand${short}`, r.total === 0 || r.short ? 'warn' : 'ok', r.id, { r, prod });
+  good();
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 
@@ -130,10 +144,7 @@ async function onCode(code) {
       info.stock = { total: 0, batches: [] };
     }
     if (mode === 'out') {
-      const r = await api('out', { key: prod.key, quantity: 1 });
-      if (!r.ok) { say(r.message, '', 'bad'); bad(); return; }
-      say(r.message, `Noch ${r.total} im Bestand`, r.total === 0 ? 'warn' : 'ok', r.id);
-      good();
+      sayOut(await api('out', { key: prod.key, quantity: 1 }), prod);
     } else if (mode === 'in') {
       await inSheet(prod, info.stock);
     } else {
@@ -232,6 +243,42 @@ async function countSheet(prod, stock) {
   };
   await p;
 }
+
+// Corrects the last taken-out scan: quantity (e.g. a crate of 20) and which batch.
+async function outSheet({ r, prod }) {
+  const unit = UNITS[prod.unit] || prod.unit;
+  const avail = r.before.reduce((s, b) => s + b.q, 0);
+  let batch = '';
+  const p = openSheet(`<h2>${esc(prod.name)}</h2><div class="sub">Auslagern ändern · ${avail} ${esc(unit)} vorhanden</div>
+    <label>Menge</label><div class="row"><button class="step" id="m">−</button><input id="qty" inputmode="decimal" value="${r.taken.reduce((s, x) => s + x.q, 0)}"><button class="step" id="pl">+</button></div>
+    <div class="chips" style="margin-top:8px">${[2, 6, 10, 12, 20, 24].map((n) => `<button class="chip" data-n="${n}">${n}</button>`).join('')}</div>
+    ${r.before.length > 1 ? `<label>Aus welcher Charge?</label><button class="batch on" data-b=""><span>Früheste zuerst</span><span>empfohlen</span></button>
+      ${r.before.map((b) => `<button class="batch" data-b="${b.id}"><span>MHD ${fmtExp(b.exp)}</span><span>${b.q} ${esc(unit)}</span></button>`).join('')}` : ''}
+    <div class="actions"><button class="btn" id="no">Abbrechen</button><button class="btn out" id="ok">Auslagern</button></div>`);
+  const q = $('#qty');
+  $('#m').onclick = () => { q.value = Math.max(1, (Number(q.value) || 1) - 1); };
+  $('#pl').onclick = () => { q.value = (Number(q.value) || 0) + 1; };
+  document.querySelectorAll('#sheet .chip').forEach((c) => c.onclick = () => { q.value = c.dataset.n; });
+  document.querySelectorAll('#sheet .batch').forEach((c) => c.onclick = () => {
+    batch = c.dataset.b;
+    document.querySelectorAll('#sheet .batch').forEach((x) => x.classList.toggle('on', x === c));
+  });
+  $('#no').onclick = () => closeSheet(null);
+  $('#ok').onclick = async () => {
+    const n = Number(String(q.value).replace(',', '.'));
+    if (!(n > 0)) { q.focus(); return; }
+    try {
+      const res = await api('correct', { id: r.id, quantity: n, batch_id: batch ? Number(batch) : undefined });
+      closeSheet(true); sayOut(res, prod);
+    } catch (e) { closeSheet(null); say(e.message, '', 'bad'); bad(); }
+  };
+  await p;
+}
+$('#change').onclick = async () => {
+  if (!lastOut || busy) return;
+  busy = true; armIdle();
+  try { await outSheet(lastOut); } finally { busy = false; }
+};
 
 // ---------- tiles ----------
 function renderTiles() {

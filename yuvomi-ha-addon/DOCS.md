@@ -17,7 +17,7 @@ A scan page for the pantry, meant for a phone or tablet on the wall.
 
 If the camera field says "Keine Kamera verfügbar (TypeError)", the page is not on HTTPS. The HA companion app uses its internal URL at home, often `http://<ip>:8123`; set the internal URL to the HTTPS address too.
 
-Modes: **Auslagern** (each scan takes 1, earliest expiry first, with undo), **Einlagern** (quantity, best-before date, location), **Zählen** (set the real stock). Scan with the camera or with a keyboard-wedge scanner (USB, PS/2 via adapter). Items without a barcode go on tiles ("Ohne Code"). Unknown barcodes are asked once; the name is suggested from Open Food Facts (switch off with the option, then no code leaves your network). The mapping barcode to article is kept in `/data/terminal.json`.
+Modes: **Auslagern** (each scan takes 1, earliest expiry first, with undo; **Ändern** after a scan sets another quantity, e.g. a crate of 20, or picks the batch by best-before date), **Einlagern** (quantity, best-before date, location), **Zählen** (set the real stock). Scan with the camera or with a keyboard-wedge scanner (USB, PS/2 via adapter). Items without a barcode go on tiles ("Ohne Code"). Unknown barcodes are asked once; the name is suggested from Open Food Facts (switch off with the option, then no code leaves your network). The mapping barcode to article is kept in `/data/terminal.json`.
 
 ## Data
 
