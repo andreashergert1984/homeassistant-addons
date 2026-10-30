@@ -1,6 +1,6 @@
 ---
 name: Yuvomi Family Planner
-version: "2.79.0-1"
+version: "2.83.0"
 slug: yuvomi
 description: >-
   Self-hosted family planner: tasks, calendar, budget, meals, shopping, health
@@ -21,6 +21,8 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:barcode-scan
 panel_title: Vorrat
+# Also for non-admin users, e.g. a restricted account on the pantry wall phone.
+panel_admin: false
 webui: "[PROTO:ssl]://[HOST]:[PORT:3000]"
 watchdog: "http://[HOST]:[PORT:3000]/health"
 

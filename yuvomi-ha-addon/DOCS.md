@@ -11,9 +11,9 @@ Runs the upstream [Yuvomi](https://github.com/ulsklyc/yuvomi) image unchanged.
 
 A scan page for the pantry, meant for a phone or tablet on the wall.
 
-1. In Yuvomi: Settings, Household, API access, create a token with scope `pantry:write`.
+1. In Yuvomi: Settings, Household, API access, create a token. Limit it to the Pantry module with write access (`pantry:write`) and choose **no expiration**: since Yuvomi 2.81 a new token defaults to 90 days, and the terminal stops working when it expires.
 2. Paste it into the add-on option **API token** and restart the add-on.
-3. Open "Vorrat" in the HA sidebar (needs HTTPS for the camera).
+3. Open "Vorrat" in the HA sidebar (needs HTTPS for the camera). The panel is also shown to non-admin users, so a wall phone can use a restricted HA account.
 
 Modes: **Auslagern** (each scan takes 1, earliest expiry first, with undo), **Einlagern** (quantity, best-before date, location), **Zählen** (set the real stock). Scan with the camera or with a keyboard-wedge scanner (USB, PS/2 via adapter). Items without a barcode go on tiles ("Ohne Code"). Unknown barcodes are asked once; the name is suggested from Open Food Facts (switch off with the option, then no code leaves your network). The mapping barcode to article is kept in `/data/terminal.json`.
 
