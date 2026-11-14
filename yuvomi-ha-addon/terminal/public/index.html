@@ -355,7 +355,10 @@ async function startCamera() {
   const loop = () => {
     if (!busy && !$('#sheetBg').classList.contains('on') && v.videoWidth) {
       c.width = v.videoWidth; c.height = v.videoHeight; ctx.drawImage(v, 0, 0);
-      try { trigger(reader.decodeFromCanvas(c).getText()); } catch {}
+      try {
+        const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c)));
+        trigger(reader.decodeBitmap(bmp).getText());
+      } catch {}
     }
     setTimeout(loop, 200);
   };
