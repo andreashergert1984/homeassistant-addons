@@ -313,6 +313,13 @@ function flushBuf() {
 }
 
 // ---------- camera ----------
+function scannerPref() {
+  try {
+    const q = new URLSearchParams(location.search).get('scanner');
+    if (q === 'native' || q === 'zxing') localStorage.setItem('yuvomi_scanner', q);
+  } catch {}
+  try { return localStorage.getItem('yuvomi_scanner') || 'zxing'; } catch { return 'zxing'; }
+}
 async function startCamera() {
   const v = $('#v'), off = $('#camoff');
   try {
@@ -323,7 +330,11 @@ async function startCamera() {
     return;
   }
   const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
-  if ('BarcodeDetector' in window) {
+  // Scanner-Wahl: Standard ZXing (reines JS, braucht kein Google). Der native
+  // BarcodeDetector laeuft auf Android ueber die Play Services und stuerzt die
+  // WebView ohne Google ab (nicht in JS abfangbar). Darum nur per Schalter:
+  // ?scanner=native einmalig in der URL, wird in localStorage gemerkt.
+  if (scannerPref() === 'native' && 'BarcodeDetector' in window) {
     let det;
     try { const sup = await BarcodeDetector.getSupportedFormats(); det = new BarcodeDetector({ formats: formats.filter((f) => sup.includes(f)) }); } catch {}
     if (det) {
