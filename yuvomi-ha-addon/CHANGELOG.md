@@ -1,3 +1,9 @@
+## 2.83.0.5
+
+- Kamera umschaltbar (Knopf "Kamera wechseln" im Kamerabild, wird im Geraet gemerkt): Frontkamera fuer ein Wandgeraet, vor dessen Display man den Artikel haelt. Bild der Frontkamera gespiegelt.
+- Gut sichtbares Aufblitzen nach jedem Scan (gruen gebucht, orange letzter Bestand oder Fehlmenge, rot Fehler); Ton wird bei der ersten Beruehrung freigeschaltet.
+- Dekodieren pausiert bei ausgeschaltetem Bildschirm (spart Akku).
+
 ## 2.83.0.4
 
 - ZXing-Scanner korrigiert: decodeFromCanvas gibt es in der Bibliothek nicht, der Aufruf schlug jedes Bild still fehl. Jetzt per BinaryBitmap/HybridBinarizer/HTMLCanvasElementLuminanceSource und decodeBitmap, gegen echten EAN-13 geprueft.

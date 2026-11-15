@@ -17,6 +17,10 @@ header { display:flex; gap:8px; padding:10px; padding-top:max(10px, env(safe-are
 #cam { position:relative; background:#000; height:34vh; min-height:150px; overflow:hidden; }
 #cam video { width:100%; height:100%; object-fit:cover; }
 #cam .frame { position:absolute; inset:18% 12%; border:3px solid rgba(255,255,255,.55); border-radius:14px; pointer-events:none; }
+#cam video.mirror { transform:scaleX(-1); }
+#camSwitch { position:absolute; right:8px; bottom:8px; padding:8px 12px; border:0; border-radius:10px; background:rgba(0,0,0,.55); color:#fff; font:600 14px system-ui; z-index:2; }
+#flash { position:fixed; inset:0; pointer-events:none; opacity:0; transition:opacity .35s ease-out; z-index:20; }
+#flash.ok { background:#1f9d55; } #flash.warn { background:#d98c1f; } #flash.bad { background:#d0342c; }
 #camoff { position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--mut); }
 #status { padding:14px 16px; font-size:20px; font-weight:600; min-height:64px; border-bottom:1px solid var(--line); }
 #status.ok { background:#16382a; } #status.warn { background:#3d2a14; } #status.bad { background:#401a1c; }
@@ -58,7 +62,8 @@ input, select { width:100%; padding:14px; border-radius:10px; border:1px solid v
   <button class="mode" data-m="in">Einlagern</button>
   <button class="mode" data-m="count">Zählen</button>
 </header>
-<div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div></div>
+<div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div><button id="camSwitch">Kamera wechseln</button></div>
+<div id="flash"></div>
 <div id="status"><span id="acts"><button id="change">Ändern</button><button id="undo">Rückgängig</button></span><span id="msg">Bereit. Code vor die Kamera halten.</span></div>
 <main>
   <h3><span>Ohne Code</span><span><button class="link" id="editTiles">Bearbeiten</button><button class="link" id="addTile">+ Neu</button></span></h3>
@@ -76,16 +81,28 @@ let mode = 'out', boot = null, busy = false, last = { code: '', t: 0 }, lastUndo
 
 // ---------- feedback ----------
 let actx;
+function audio() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch {}
+  return actx;
+}
+// Die WebView gibt Ton oft erst nach einer Beruehrung frei; jede Beruehrung weckt den Ton.
+document.addEventListener('pointerdown', audio, { passive: true });
+let flashT;
+function flash(cls) {
+  const f = $('#flash'); if (!f) return;
+  clearTimeout(flashT); f.style.transition = 'none'; f.className = cls; f.style.opacity = '.55';
+  flashT = setTimeout(() => { f.style.transition = ''; f.style.opacity = '0'; }, 140);
+}
 function beep(f, ms) {
   try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     const o = actx.createOscillator(), g = actx.createGain();
     o.frequency.value = f; g.gain.value = 0.15; o.connect(g); g.connect(actx.destination);
     o.start(); o.stop(actx.currentTime + ms / 1000);
   } catch {}
 }
-const good = () => { beep(880, 90); navigator.vibrate && navigator.vibrate(40); };
-const bad = () => { beep(220, 300); navigator.vibrate && navigator.vibrate([80, 60, 80]); };
+const good = (cls) => { beep(880, 90); flash(cls || 'ok'); navigator.vibrate && navigator.vibrate(40); };
+const bad = () => { beep(220, 300); flash('bad'); navigator.vibrate && navigator.vibrate([80, 60, 80]); };
 function say(text, sub, cls, undoId, out) {
   const s = $('#status'); s.className = cls || '';
   $('#msg').innerHTML = '';
@@ -101,8 +118,9 @@ function sayOut(r, prod) {
   if (!r.ok) { say(r.message, '', 'bad'); bad(); return; }
   const from = r.taken.map((x) => (r.taken.length > 1 ? x.q + ' aus ' : 'aus ') + fmtExp(x.exp)).join(', ');
   const short = r.short ? ` · ${r.short} fehlten im Bestand` : '';
-  say(r.message, `${from} · noch ${r.total} im Bestand${short}`, r.total === 0 || r.short ? 'warn' : 'ok', r.id, { r, prod });
-  good();
+  const cls = r.total === 0 || r.short ? 'warn' : 'ok';
+  say(r.message, `${from} · noch ${r.total} im Bestand${short}`, cls, r.id, { r, prod });
+  good(cls);
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 
@@ -320,11 +338,31 @@ function scannerPref() {
   } catch {}
   try { return localStorage.getItem('yuvomi_scanner') || 'zxing'; } catch { return 'zxing'; }
 }
-async function startCamera() {
-  const v = $('#v'), off = $('#camoff');
+// Kamera-Wahl: Rueckkamera (Standard) oder Frontkamera fuer ein Wandgeraet, an dem man
+// den Artikel vor das Display haelt. Umschalten per Knopf im Kamerabild oder einmalig
+// ?camera=user|environment (wirkt nur bei direktem Aufruf, nicht im HA-Rahmen); gemerkt in localStorage.
+function camPref() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
-    v.srcObject = stream; await v.play();
+    const q = new URLSearchParams(location.search).get('camera');
+    if (q === 'user' || q === 'environment') localStorage.setItem('yuvomi_camera', q);
+  } catch {}
+  try { return localStorage.getItem('yuvomi_camera') === 'user' ? 'user' : 'environment'; } catch { return 'environment'; }
+}
+let camGen = 0, camStream = null;
+const scanning = (v) => document.visibilityState === 'visible' && !busy && !$('#sheetBg').classList.contains('on') && v.readyState >= 2;
+async function loadZXing() {
+  if (window.ZXing) return;
+  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/zxing.js'; s.onload = res; s.onerror = rej; document.head.append(s); });
+}
+async function startCamera() {
+  const gen = ++camGen;
+  const v = $('#v'), off = $('#camoff'), facing = camPref();
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  off.style.display = 'none';
+  v.classList.toggle('mirror', facing === 'user');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 } }, audio: false });
+    v.srcObject = camStream; await v.play();
   } catch (e) {
     off.style.display = 'flex'; off.textContent = 'Keine Kamera verfügbar (' + (e.name || e.message) + '). Ein Tastatur-Scanner funktioniert trotzdem.';
     return;
@@ -339,7 +377,8 @@ async function startCamera() {
     try { const sup = await BarcodeDetector.getSupportedFormats(); det = new BarcodeDetector({ formats: formats.filter((f) => sup.includes(f)) }); } catch {}
     if (det) {
       const loop = async () => {
-        if (!busy && !$('#sheetBg').classList.contains('on') && v.readyState >= 2) {
+        if (gen !== camGen) return;
+        if (scanning(v)) {
           try { const r = await det.detect(v); if (r.length) trigger(r[0].rawValue); } catch {}
         }
         setTimeout(loop, 160);
@@ -348,12 +387,14 @@ async function startCamera() {
     }
   }
   // fallback: ZXing
-  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/zxing.js'; s.onload = res; s.onerror = rej; document.head.append(s); });
+  await loadZXing();
+  if (gen !== camGen) return;
   const hints = new Map([[ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]]]);
   const reader = new ZXing.BrowserMultiFormatReader(hints);
   const c = document.createElement('canvas'), ctx = c.getContext('2d', { willReadFrequently: true });
   const loop = () => {
-    if (!busy && !$('#sheetBg').classList.contains('on') && v.videoWidth) {
+    if (gen !== camGen) return;
+    if (scanning(v) && v.videoWidth) {
       c.width = v.videoWidth; c.height = v.videoHeight; ctx.drawImage(v, 0, 0);
       try {
         const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c)));
@@ -364,6 +405,11 @@ async function startCamera() {
   };
   loop();
 }
+$('#camSwitch').onclick = (e) => {
+  e.currentTarget.blur();
+  try { localStorage.setItem('yuvomi_camera', camPref() === 'user' ? 'environment' : 'user'); } catch {}
+  startCamera();
+};
 
 // ---------- start ----------
 async function wake() { try { if (navigator.wakeLock) { await navigator.wakeLock.request('screen'); } } catch {} }

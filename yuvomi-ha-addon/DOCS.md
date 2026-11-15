@@ -46,6 +46,18 @@ app uses its **internal URL** at home, often `http://<ip>:8123`. Set the interna
 URL in the app (Settings → Companion app → server) to the HTTPS address as well.
 Grant the app the camera permission in Android.
 
+**Front or back camera:** the button "Kamera wechseln" in the camera picture
+switches between the back camera (default) and the front camera. The choice is
+stored on the device. Use the front camera on a wall device: hold the barcode
+15 to 25 cm in front of the display. The same code is booked again only after it
+was out of the picture for about 2.5 seconds, so holding it too long does not
+book twice.
+
+**Scanner engine:** by default the terminal decodes with ZXing (plain JavaScript).
+The browser's own `BarcodeDetector` needs Google Play services on Android and
+crashes the WebView on devices without them; opening the terminal directly with
+`?scanner=native` switches to it (not possible inside the HA sidebar frame).
+
 If the page says "Add-on-Optionen prüfen: api_token", step 2 is missing or the
 add-on was not restarted.
 
@@ -68,7 +80,11 @@ add-on was not restarted.
 
 - Pin the app (Android "App pinning") so the device stays on the terminal.
 - Keep it on the charger; if the device can limit charging to 80 %, use that.
-- The screen stays on while the page is open.
+- The screen stays on while the page is open; decoding pauses while the screen is off.
+- Every scan flashes the screen (green booked, orange last stock or short, red
+  error) and beeps. Android WebViews often allow sound only after the first touch.
+- With Fully Kiosk and its Home Assistant integration an automation can switch
+  the screen on when the pantry door opens and off a few minutes after it closes.
 
 ## Data
 
