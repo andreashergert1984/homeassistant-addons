@@ -6,7 +6,7 @@ const L = require('../lib/logic');
 const t = (state, phase = null) => ({ state, phase });
 
 test('Aktionen je Zustand', () => {
-  assert.deepStrictEqual(L.actionsFor(t('entwurf')).map((a) => a.key).sort(), ['entwerfen', 'umsetzen', 'verwerfen'].sort());
+  assert.deepStrictEqual(L.actionsFor(t('entwurf')).map((a) => a.key).sort(), ['entwerfen', 'umsetzen', 'sofort', 'verwerfen'].sort());
   assert.ok(!L.actionsFor(t('neu')).some((a) => a.key === 'umsetzen'), 'ohne Entwurf keine Umsetzung');
   assert.deepStrictEqual(L.actionsFor(t('in_arbeit')), []);
 });
@@ -24,6 +24,21 @@ test('Antwort und Nachbessern brauchen einen Kommentar', () => {
   assert.strictEqual(L.applyAction(t('pruefen'), 'nachbessern', 'Licht zu hell'), 'umsetzen');
   assert.strictEqual(L.applyAction(t('fehler', 'umsetzen'), 'wiederholen'), 'umsetzen');
   assert.throws(() => L.applyAction(t('neu'), 'gibtsnicht'), /Unbekannte/);
+});
+
+test('Sofort umsetzen', () => {
+  assert.strictEqual(L.applyAction(t('neu'), 'sofort'), 'umsetzen');
+  assert.strictEqual(L.applyAction(t('entwurf'), 'sofort'), 'umsetzen');
+  assert.throws(() => L.applyAction(t('in_arbeit'), 'sofort'));
+  assert.throws(() => L.applyAction(t('umgesetzt'), 'sofort'), /nicht möglich/, 'nach Umsetzung nur Nachbessern mit Kommentar');
+  assert.ok(L.actionsFor(t('neu')).find((a) => a.key === 'sofort').immediate);
+  assert.deepStrictEqual(L.parseIntake('sofort: Flurlicht dimmen'), { title: 'Flurlicht dimmen', immediate: true });
+  assert.deepStrictEqual(L.parseIntake('Sofort - Licht'), { title: 'Licht', immediate: true });
+  assert.deepStrictEqual(L.parseIntake('! Licht'), { title: 'Licht', immediate: true });
+  assert.deepStrictEqual(L.parseIntake('Sofortbild-Kamera einbinden'), { title: 'Sofortbild-Kamera einbinden', immediate: false });
+  assert.deepStrictEqual(L.parseIntake('Licht!'), { title: 'Licht!', immediate: false });
+  const q = L.pickQueue([{ id: 1, state: 'umsetzen', updated: 'a' }, { id: 2, state: 'entwerfen', updated: 'a' }], 5, [1]);
+  assert.deepStrictEqual(q.map((x) => x.t.id), [1], 'Sofort-Lauf nimmt nur die angestoßenen Tickets');
 });
 
 test('Uhrzeiten', () => {

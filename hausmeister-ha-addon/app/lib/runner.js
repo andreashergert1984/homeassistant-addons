@@ -47,6 +47,12 @@ function promptFor(t, phase) {
   if (phase === 'entwerfen') {
     parts.push('Aufgabe: ENTWURF. Untersuche die Lage nur lesend und beschreibe genau, was du ändern würdest. Ändere nichts.');
     if (last) parts.push('', 'Es gibt schon einen Entwurf; überarbeite ihn anhand der Kommentare:', last.details || '');
+  } else if (t.direct) {
+    parts.push('Aufgabe: SOFORT UMSETZEN. Ein Mensch hat das Ticket ohne vorherigen Entwurf zur Umsetzung freigegeben. Untersuche die Lage, plane und setze um. Halte dich an die Regeln.');
+    parts.push('Wenn der Eingriff riskant ist (etwas löschen, größerer Umbau, Sicherheits- oder Schutzfunktionen, Heizung, Akkus, Wechselrichter) oder das Ziel unklar ist: nichts ändern, Status rueckfrage, und in details deinen Plan beschreiben, damit er freigegeben werden kann.');
+    if (last) parts.push('', 'Vorhandener Entwurf (als Ausgangspunkt):', last.details || '');
+    const prev = [...t.results].reverse().find((r) => r.phase === 'umsetzen');
+    if (prev) parts.push('', 'Frühere Umsetzung dieses Tickets:', prev.details || prev.message || '', 'Die Kommentare danach beschreiben, was nachzubessern ist.');
   } else {
     parts.push('Aufgabe: UMSETZUNG des freigegebenen Entwurfs. Halte dich an den Entwurf und an die Regeln. Wenn die Lage nicht mehr zum Entwurf passt, Status rueckfrage.');
     parts.push('', 'Freigegebener Entwurf:', last ? last.details : '(kein Entwurf gespeichert, dann rueckfrage)');
@@ -77,6 +83,7 @@ class Runner {
     this.busy = false;
     this.current = null;
     this.child = null;
+    this.pending = new Set();
   }
 
   loggedIn() {
@@ -88,13 +95,23 @@ class Runner {
     try { return await git.snapshot(`Sicherung (${reason})`); } catch (e) { console.error('[hausmeister] Sicherung:', e.message); return null; }
   }
 
-  async cycle(reason, by = 'Zeitplan') {
+  // Starts a run for these tickets right away, or right after the current run.
+  kick(ids, by) {
+    for (const id of ids) this.pending.add(id);
+    if (!this.busy) {
+      const only = [...this.pending];
+      this.pending.clear();
+      this.cycle('sofort', by, only).catch((e) => console.error(e));
+    }
+  }
+
+  async cycle(reason, by = 'Zeitplan', only = null) {
     if (this.busy) return { skipped: 'läuft schon' };
     this.busy = true;
     const run = { at: new Date().toISOString(), reason, by, tickets: [], note: '' };
     try {
       run.backup = await this.backup(reason);
-      const queue = L.pickQueue(this.store.data.tickets, this.opts.max_tickets_per_run);
+      const queue = L.pickQueue(this.store.data.tickets, this.opts.max_tickets_per_run, only);
       if (!queue.length) { run.note = 'nichts zu tun'; return run; }
       if (!this.loggedIn()) {
         run.note = 'Claude ist nicht angemeldet';
@@ -116,6 +133,7 @@ class Runner {
       this.current = null;
       this.store.addRun(run);
       if (this.onChange) this.onChange();
+      if (this.pending.size) setImmediate(() => this.kick([], 'sofort'));
     }
   }
 

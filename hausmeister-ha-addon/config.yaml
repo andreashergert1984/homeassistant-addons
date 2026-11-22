@@ -1,6 +1,6 @@
 ---
 name: Hausmeister
-version: "0.1.3"
+version: "0.2.0"
 slug: hausmeister
 description: >-
   Tickets für das Smart Home, die Claude Code nach deiner Freigabe bearbeitet:

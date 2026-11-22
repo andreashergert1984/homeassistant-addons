@@ -133,6 +133,24 @@ test('kompletter Ablauf mit Entwurf, Freigabe, Umsetzung und Rückrollung', asyn
   assert.ok(tracked.includes('.storage/core.entity_registry'), 'Registry trotz Größe gesichert');
 });
 
+test('Sofort umsetzen: startet ohne Zeitplan, plant und setzt in einem Lauf um', async () => {
+  const other = (await post('/api/tickets', { title: 'Wartet auf den Zeitplan', mode: 'entwurf' })).body.id;
+  const created = await post('/api/tickets', { title: 'Sofort etwas einbinden', mode: 'sofort' });
+  assert.strictEqual(created.status, 200);
+  const id = created.body.id;
+  for (let i = 0; i < 200 && (await get(`/api/tickets/${id}`)).state !== 'umgesetzt'; i++) await new Promise((r) => setTimeout(r, 25));
+  const t = await get(`/api/tickets/${id}`);
+  assert.strictEqual(t.state, 'umgesetzt');
+  assert.strictEqual(t.results.length, 1, 'kein Entwurf vorher');
+  const args = fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n').map(JSON.parse).pop();
+  assert.ok(args.join(' ').includes('SOFORT UMSETZEN'));
+  assert.strictEqual(args[args.indexOf('--permission-mode') + 1], 'acceptEdits');
+  assert.strictEqual((await get(`/api/tickets/${other}`)).state, 'entwerfen', 'andere Tickets warten auf den Zeitplan');
+  assert.strictEqual((await get('/api/state')).runs[0].reason, 'sofort');
+  assert.strictEqual((await post('/api/tickets', { title: 'x', mode: 'quatsch' })).status, 400);
+  await post(`/api/tickets/${other}/action`, { action: 'verwerfen' });
+});
+
 test('Wächter: geschrumpfte Datei und verschwundene Entität führen zu "pruefen"', async () => {
   fs.writeFileSync(fakeClaude, fs.readFileSync(fakeClaude, 'utf8').replace(
     "if (!draft) fs.appendFileSync(", `if (!draft) fs.writeFileSync(${JSON.stringify(path.join(tmp, 'broken'))}, '');\nif (!draft) fs.writeFileSync(`,

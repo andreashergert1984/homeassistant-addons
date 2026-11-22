@@ -24,9 +24,14 @@
     <form id="newform">
       <label>Was soll passieren?<input name="title" required maxlength="200" placeholder="z. B. Flurlicht nachts nur gedimmt einschalten"></label>
       <label>Beschreibung<textarea name="text" rows="6" placeholder="Was genau, wo, warum. Je konkreter, desto besser der Entwurf."></textarea></label>
-      <label class="row"><input type="checkbox" name="draft" checked> Claude soll beim nächsten Lauf einen Entwurf machen</label>
+      <fieldset class="modes">
+        <legend>Wie soll es laufen?</legend>
+        <label class="row"><input type="radio" name="mode" value="entwurf" checked> Erst Entwurf beim nächsten Lauf, dann gebe ich frei</label>
+        <label class="row"><input type="radio" name="mode" value="sofort"> Sofort umsetzen, ohne Entwurf (bei riskanten Dingen fragt Claude trotzdem nach)</label>
+        <label class="row"><input type="radio" name="mode" value="sammeln"> Nur sammeln, noch nichts tun</label>
+      </fieldset>
       <button type="submit" class="primary">Ticket anlegen</button>
-      <p class="hint">Tickets lassen sich auch über die To-do-Liste „Hausmeister“ anlegen, auch per Sprache. Umgesetzt wird nie ohne deine Freigabe.</p>
+      <p class="hint">Tickets lassen sich auch über die To-do-Liste „Hausmeister“ anlegen, auch per Sprache. Ohne Sofort-Modus wird nichts ohne deine Freigabe umgesetzt. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt.</p>
     </form>
   </section>
   <section id="tab-laeufe" hidden><div id="runs"></div></section>

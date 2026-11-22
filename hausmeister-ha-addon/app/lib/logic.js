@@ -21,6 +21,9 @@ const STATES = {
 const ACTIONS = {
   entwerfen: { label: 'Claude soll entwerfen', from: ['neu', 'entwurf', 'rueckfrage', 'fehler', 'zurueckgerollt', 'verworfen', 'erledigt'], to: 'entwerfen' },
   umsetzen: { label: 'Claude soll umsetzen', from: ['entwurf'], to: 'umsetzen' },
+  // Immediately, without waiting for the schedule; from a draft it implements that draft,
+  // otherwise Claude plans and implements in one go.
+  sofort: { label: 'Sofort umsetzen', from: ['neu', 'entwerfen', 'entwurf', 'rueckfrage', 'umsetzen', 'fehler', 'zurueckgerollt'], to: 'umsetzen', immediate: true },
   antworten: { label: 'Antwort senden', from: ['rueckfrage'], to: (t) => t.phase === 'umsetzen' ? 'umsetzen' : 'entwerfen', comment: true },
   nachbessern: { label: 'Nachbessern', from: ['umgesetzt', 'pruefen'], to: 'umsetzen', comment: true },
   wiederholen: { label: 'Erneut versuchen', from: ['fehler'], to: (t) => t.phase === 'umsetzen' ? 'umsetzen' : 'entwerfen' },
@@ -32,7 +35,7 @@ const ACTIONS = {
 function actionsFor(ticket) {
   return Object.entries(ACTIONS)
     .filter(([, a]) => a.from.includes(ticket.state))
-    .map(([key, a]) => ({ key, label: a.label, comment: !!a.comment }));
+    .map(([key, a]) => ({ key, label: a.label, comment: !!a.comment, immediate: !!a.immediate }));
 }
 
 function applyAction(ticket, key, comment) {
@@ -79,8 +82,8 @@ function nextRun(times, now) {
 }
 
 // Picks the queued tickets for one run: drafts first (cheap, read only), then implementations.
-function pickQueue(tickets, max) {
-  const by = (s) => tickets.filter((t) => t.state === s).sort((a, b) => a.updated.localeCompare(b.updated));
+function pickQueue(tickets, max, only) {
+  const by = (s) => tickets.filter((t) => t.state === s && (!only || only.includes(t.id))).sort((a, b) => a.updated.localeCompare(b.updated));
   return [...by('entwerfen').map((t) => ({ t, phase: 'entwerfen' })), ...by('umsetzen').map((t) => ({ t, phase: 'umsetzen' }))].slice(0, max);
 }
 
@@ -156,9 +159,15 @@ const RESULT_SCHEMA = {
   required: ['status', 'zusammenfassung', 'details'],
 };
 
+// "sofort: ..." or "! ..." at the start of a todo item means: implement right away.
+function parseIntake(summary) {
+  const m = /^\s*(?:sofort\s*[:!-]|!)\s*(.*)$/i.exec(String(summary || ''));
+  return m ? { title: m[1].trim() || String(summary).trim(), immediate: true } : { title: String(summary || '').trim(), immediate: false };
+}
+
 function slug(s) {
   return String(s).toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'ticket';
 }
 
-module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug };
+module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, parseIntake };

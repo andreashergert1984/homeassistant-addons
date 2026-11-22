@@ -97,7 +97,7 @@ async function openTicket(id) {
   $('#detail').innerHTML = `<button class="back">← Zur Liste</button>
     <h2>#${t.id} ${esc(t.title)}</h2><div>${badge(t)} <span class="meta">angelegt ${fmt(t.created)} von ${esc(t.created_by)}</span></div>
     ${t.text ? `<div class="box md">${md(t.text)}</div>` : ''}
-    <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
+    <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' || a.key === 'sofort' ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
       ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
     <label>${needs ? 'Kommentar (für Antwort und Nachbessern nötig)' : 'Kommentar'}<textarea id="comment" rows="3"></textarea></label>
     <button id="addcomment">Nur kommentieren</button>
@@ -110,6 +110,9 @@ async function openTicket(id) {
   document.querySelectorAll('#detail [data-a]').forEach((b) => {
     b.onclick = async () => {
       const a = b.dataset.a;
+      if (a === 'sofort' && !confirm(t.state === 'entwurf' || t.state === 'umsetzen'
+        ? 'Claude setzt den Entwurf jetzt sofort um. Vorher wird gesichert. Los?'
+        : 'Claude plant und setzt jetzt sofort um, ohne dass du vorher einen Entwurf siehst. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
       if (a === 'umsetzen' && !confirm('Claude setzt den Entwurf beim nächsten Lauf um. Vorher wird gesichert. Freigeben?')) return;
       if (a === 'verwerfen' && !confirm('Ticket verwerfen?')) return;
       try { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment').value }); await load(); await openTicket(id); } catch (e) { alert(e.message); }
@@ -165,7 +168,8 @@ $('#newform').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
   try {
-    const t = await api('api/tickets', { title: f.elements.title.value, text: f.elements.text.value, draft: f.elements.draft.checked });
+    if (f.elements.mode.value === 'sofort' && !confirm('Claude plant und setzt sofort um, ohne Entwurf zur Freigabe. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
+    const t = await api('api/tickets', { title: f.elements.title.value, text: f.elements.text.value, mode: f.elements.mode.value });
     f.reset();
     await load();
     document.querySelector('nav button[data-tab="tickets"]').click();

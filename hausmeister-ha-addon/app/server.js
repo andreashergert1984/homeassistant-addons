@@ -66,13 +66,17 @@ async function intake() {
     intakeWarned = true;
     return;
   }
+  const now = [];
   for (const it of items.filter((i) => i.status === 'needs_action')) {
-    const t = store.create({ title: it.summary, text: it.description || '', by: 'To-do-Liste', source: 'todo', state: opts.auto_draft ? 'entwerfen' : 'neu' });
+    const p = L.parseIntake(it.summary);
+    const t = store.create({ title: p.title, text: it.description || '', by: 'To-do-Liste', source: 'todo', state: p.immediate ? 'umsetzen' : (opts.auto_draft ? 'entwerfen' : 'neu'), direct: p.immediate });
+    if (p.immediate) now.push(t.id);
     try {
       await ha.core('POST', '/services/todo/remove_item', { entity_id: opts.intake_todo, item: it.uid || it.summary });
     } catch (e) { console.error(`[hausmeister] Eintrag nicht entfernt (#${t.id}):`, e.message); }
     console.log(`[hausmeister] Ticket #${t.id} aus der To-do-Liste: ${t.title}`);
   }
+  if (now.length) runner.kick(now, 'To-do-Liste');
   if (items.length) publish().catch(() => {});
 }
 
@@ -148,7 +152,11 @@ async function route(req, res) {
     if (req.method === 'GET' && m) return send(res, 200, view(store.get(m[1]), true));
     if (req.method === 'POST' && p === '/api/tickets') {
       const b = await readBody(req);
-      const t = store.create({ title: b.title, text: b.text, by: who(req), state: b.draft === false ? 'neu' : (b.draft || opts.auto_draft ? 'entwerfen' : 'neu') });
+      const mode = b.mode || (b.draft === false ? 'sammeln' : 'entwurf');
+      if (!['entwurf', 'sofort', 'sammeln'].includes(mode)) throw new Error(`Unbekannter Modus ${mode}`);
+      const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[mode];
+      const t = store.create({ title: b.title, text: b.text, by: who(req), state, direct: mode === 'sofort' });
+      if (mode === 'sofort') runner.kick([t.id], who(req));
       publish().catch(() => {});
       return send(res, 200, view(t, true));
     }
@@ -170,7 +178,11 @@ async function route(req, res) {
         if (t.state === 'in_arbeit') throw new Error('Das Ticket wird gerade bearbeitet');
         const to = L.applyAction(t, b.action, b.comment);
         if (b.comment && String(b.comment).trim()) t.comments.push({ at: store.now(), by: who(req), text: String(b.comment).trim() });
+        // Implementing an approved draft vs. planning and implementing in one go.
+        if (b.action === 'sofort' && t.state !== 'umsetzen') t.direct = t.state !== 'entwurf';
+        else if (b.action === 'umsetzen' || b.action === 'entwerfen') t.direct = false;
         store.move(t, to, who(req), L.ACTIONS[b.action].label);
+        if (L.ACTIONS[b.action].immediate) runner.kick([t.id], who(req));
       }
       publish().catch(() => {});
       return send(res, 200, view(t, true));

@@ -29,6 +29,14 @@ You need a Claude subscription (Pro or Max) or an Anthropic API key. Each run us
 | Umgesetzt | Check it and press "Abnehmen" or "Nachbessern" (with a comment). |
 | Umgesetzt, Wächter melden etwas | The watches found something. Check, roll back or ask for a fix. |
 
+**Sofort umsetzen** skips the approval of a draft and starts right away instead of waiting for the
+next run: choose it when creating a ticket, press it on a ticket, or start a todo item with
+`sofort:` or `!` (for example "sofort: Flurlicht auf 30 % dimmen"). Claude then plans and implements
+in one go. For risky changes (deleting, larger rebuilds, safety functions, heating, batteries,
+inverters) or unclear goals it does not change anything and asks back with its plan instead.
+Snapshots, backup, watches and rollback work as usual. Pressed on a ticket with a draft, it
+implements that draft immediately.
+
 Runs start at the configured times. Without queued tickets Claude is not started at all.
 "Jetzt ausführen" starts a run right away.
 
