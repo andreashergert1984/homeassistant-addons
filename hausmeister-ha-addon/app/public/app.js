@@ -96,7 +96,9 @@ function renderLive() {
   const login = !state.logged_in ? '<div class="box ask"><strong>Claude ist nicht angemeldet.</strong> Im Reiter „Anmeldung“ einloggen, sonst bleiben die Tickets liegen.</div>' : '';
   const wd = state.watchdog && (Date.now() - new Date(state.watchdog.at).getTime()) < 3 * 86400000
     ? `<div class="box alarm"><strong>Wächter ${ago(state.watchdog.at)}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">Nicht durch den Hausmeister verursacht. Prüfen, ob es gewollt war.</span></div>` : '';
-  const live = c ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet an #${c.id} (${c.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'})</b><span>${esc(c.step || 'startet')}</span></div><button data-open="${c.id}">Ansehen</button></div>` : '';
+  // In the open ticket the detail shows the live steps itself; no second strip with "Ansehen".
+  const here = c && openId === c.id && !$('#detail').hidden;
+  const live = c && !here ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet an #${c.id} (${c.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'})</b><span>${esc(c.step || 'startet')}</span></div><button data-open="${c.id}">Ansehen</button></div>` : '';
   $('#live').innerHTML = login + wd + live;
   document.querySelectorAll('#live [data-open]').forEach((b) => { b.onclick = () => openTicket(Number(b.dataset.open)); });
 }
@@ -200,6 +202,7 @@ async function openTicket(id) {
   $('#list').hidden = true;
   $('#stats').hidden = true;
   $('#detail').hidden = false;
+  renderLive();
   $('#detail .back').onclick = closeTicket;
   document.querySelectorAll('#detail [data-open]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); openTicket(Number(a.dataset.open)); }; });
   document.querySelectorAll('#detail [data-a]').forEach((b) => {
@@ -222,7 +225,7 @@ async function openTicket(id) {
   }
 }
 
-function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; $('#stats').hidden = false; }
+function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; $('#stats').hidden = false; if (state) renderLive(); }
 
 const BENEFIT = { hoch: 0, mittel: 1, gering: 2 };
 const EFFORT = { klein: 0, mittel: 1, gross: 2 };

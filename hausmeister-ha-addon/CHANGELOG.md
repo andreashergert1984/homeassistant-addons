@@ -1,3 +1,7 @@
+## 0.5.3
+
+- Im geöffneten Ticket, an dem Claude gerade arbeitet, entfällt der obere Streifen mit „Ansehen“; die Schritte stehen im Ticket.
+
 ## 0.5.2
 
 - Zurückrollen setzt nur noch die Dateien der Umsetzung zurück. Dateien, die Integrationen nebenbei ständig neu schreiben (Zigbee2MQTT-Zustand, Anmeldedaten von Integrationen, Registries, Ereignisprotokolle), werden getrennt angezeigt und nie zurückgesetzt; solche Dateien lernt der Hausmeister zusätzlich aus den Sicherungen zwischen den Läufen.
