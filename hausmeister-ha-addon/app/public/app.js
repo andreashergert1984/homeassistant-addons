@@ -105,8 +105,9 @@ async function openTicket(id) {
   $('#detail').innerHTML = `<button class="back">← Zur Liste</button>
     <h2>#${t.id} ${esc(t.title)}</h2><div>${badge(t)} <span class="meta">angelegt ${fmt(t.created)} von ${esc(t.created_by)}</span></div>
     ${t.text ? `<div class="box md">${md(t.text)}</div>` : ''}
+    ${t.state === 'rueckfrage' && t.results.length && t.results[t.results.length - 1].question ? `<div class="box ask"><strong>Claude fragt:</strong> ${esc(t.results[t.results.length - 1].question)}<div class="meta">Antwort ins Kommentarfeld schreiben und „Antwort senden“ drücken.</div></div>` : ''}
     ${state.current && state.current.id === t.id ? `<div class="box"><strong>Claude arbeitet gerade:</strong> ${esc(state.current.step || '')}<ol class="meta">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol></div>` : ''}
-    <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' || a.key === 'sofort' ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
+    <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' || a.key === 'antworten' || (a.key === 'sofort' && t.state !== 'rueckfrage') ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
       ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
     <label>${needs ? 'Kommentar (für Antwort und Nachbessern nötig)' : 'Kommentar'}<textarea id="comment" rows="3"></textarea></label>
     <button id="addcomment">Nur kommentieren</button>

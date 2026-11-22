@@ -1,3 +1,8 @@
+## 0.3.1
+
+- Rückfrage steht oben im Ticket, „Antwort senden“ ist hervorgehoben; Reiterleiste ohne Scrollbalken auf dem Handy.
+- README mit Bildern und Anleitung.
+
 ## 0.3.0
 
 - Push-Benachrichtigungen mit Knöpfen (Jetzt umsetzen, Verwerfen, Antworten, Passt, Nachbessern, Erneut versuchen); Tippen öffnet das Board.
