@@ -254,6 +254,16 @@ function parseIntake(summary) {
   return m ? { title: m[1].trim() || String(summary).trim(), immediate: true } : { title: String(summary || '').trim(), immediate: false };
 }
 
+// Files that integrations rewrite on their own all the time. They change between
+// the snapshots before and after an implementation without Claude touching them,
+// and restoring them would break things (a login secret, a device state).
+const VOLATILE = [
+  /^zigbee2mqtt\/(state\.json|coordinator_backup\.json|database\.db)$/, /^\.storage\/.*secret/i, /^\.storage\/.*\.(events|load|history|cache)$/,
+  /discovered_contacts/, /^\.storage\/(core\.(device_registry|entity_registry|area_registry|restore_state)|person|bluetooth\.|http\.|mobile_app|assist_pipeline\.pipelines|repairs\.issue_registry|homeassistant\.exposed_entities)/,
+  /^\.storage\/.*(token|session|cookie|cache)/i, /\.log$/,
+];
+const isVolatile = (file, learned = []) => VOLATILE.some((r) => r.test(file)) || learned.includes(file);
+
 // Normalized title for "already proposed or declined".
 function sameKey(s) {
   return String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -266,4 +276,4 @@ function slug(s) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'ticket';
 }
 
-module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, sameKey, KATEGORIEN, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };
+module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, sameKey, KATEGORIEN, VOLATILE, isVolatile, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };

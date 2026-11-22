@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { STATES, slug, sameKey, KATEGORIEN } = require('./logic');
+const { STATES, slug, sameKey, KATEGORIEN, isVolatile } = require('./logic');
 
 class Store {
   constructor(file, docDir) {
@@ -12,6 +12,17 @@ class Store {
     this.docDir = docDir;
     this.data = { next_id: 1, tickets: [], runs: [] };
     if (fs.existsSync(file)) this.data = { ...this.data, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
+    // Results from before 0.5.2 listed files that integrations change on their own; split them off
+    // so a rollback never restores them.
+    for (const t of this.data.tickets) {
+      for (const r of t.results || []) {
+        if (r.phase === 'umsetzen' && Array.isArray(r.changed) && !r.changed_by_itself) {
+          const named = new Set((r.files || []).map((f) => String(f).replace(/^\/homeassistant\//, '')));
+          r.changed_by_itself = r.changed.filter((f) => !named.has(f) && isVolatile(f));
+          r.changed = r.changed.filter((f) => !r.changed_by_itself.includes(f));
+        }
+      }
+    }
     // A restart in the middle of a run leaves tickets "in_arbeit": hand them back to the queue.
     for (const t of this.data.tickets) {
       if (t.state === 'in_arbeit') this._move(t, t.phase || 'entwerfen', 'Hausmeister', 'Lauf wurde unterbrochen (Neustart), Ticket wieder eingereiht');

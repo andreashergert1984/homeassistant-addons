@@ -45,6 +45,7 @@ fs.appendFileSync(${JSON.stringify(path.join(tmp, 'claude-args.log'))}, JSON.str
 const draft = a[a.indexOf('--permission-mode') + 1] === 'default';
 if (!draft) fs.appendFileSync(${JSON.stringify(path.join(cfg, 'configuration.yaml'))}, 'automation: !include automations.yaml\\n');
 const rundgang = a[a.indexOf('-p') + 1].startsWith('Aufgabe: RUNDGANG');
+if (!draft && !rundgang) { fs.mkdirSync(${JSON.stringify(path.join(cfg, 'zigbee2mqtt'))}, { recursive: true }); fs.writeFileSync(${JSON.stringify(path.join(cfg, 'zigbee2mqtt', 'state.json'))}, String(Date.now())); }
 const out = rundgang
   ? { status: 'entwurf', zusammenfassung: 'Zwei Dinge gefunden.', details: 'Befunde', vorschlaege: [{ titel: 'Batterie Flursensor tauschen', text: 'leer', begruendung: 'sensor.flur_batterie 4 %', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein', handarbeit: true }, { titel: 'Reparatur offen', text: 'x', kategorie: 'unsinn', nutzen: 'mittel', aufwand: 'mittel' }, { titel: 'Batterie  Flursensor TAUSCHEN!', text: 'doppelt', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein' }] }
   : draft
@@ -117,6 +118,8 @@ test('kompletter Ablauf mit Entwurf, Freigabe, Umsetzung und Rückrollung', asyn
   assert.strictEqual(t.state, 'umgesetzt');
   const impl = t.results[t.results.length - 1];
   assert.deepStrictEqual(impl.changed, ['configuration.yaml']);
+  assert.deepStrictEqual(impl.changed_by_itself, ['zigbee2mqtt/state.json'], 'Zustand von Zigbee2MQTT gehört nicht zur Umsetzung');
+  const zigbee = fs.readFileSync(path.join(cfg, 'zigbee2mqtt', 'state.json'), 'utf8');
   assert.deepStrictEqual(impl.watch, []);
   assert.ok(t.can_rollback);
   const implArgs = JSON.parse(fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n')[1]);
@@ -129,6 +132,7 @@ test('kompletter Ablauf mit Entwurf, Freigabe, Umsetzung und Rückrollung', asyn
   assert.strictEqual(rb.status, 200, JSON.stringify(rb.body));
   assert.strictEqual(rb.body.state, 'zurueckgerollt');
   assert.strictEqual(fs.readFileSync(path.join(cfg, 'configuration.yaml'), 'utf8'), before, 'Datei wieder wie vorher');
+  assert.strictEqual(fs.readFileSync(path.join(cfg, 'zigbee2mqtt', 'state.json'), 'utf8'), zigbee, 'nebenbei geänderte Datei bleibt');
   assert.ok(calls.includes('POST /sup/core/restart'), 'YAML-Rückrollung startet Core neu');
   assert.ok(!calls.includes('POST /sup/core/stop'), 'ohne .storage kein Stopp');
 

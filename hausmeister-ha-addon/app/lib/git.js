@@ -85,8 +85,8 @@ async function log(n = 40) {
 }
 
 // Restores the files that changed between pre and post to their state in pre.
-async function restore(pre, post) {
-  const files = await changedFiles(pre, post);
+async function restore(pre, post, only) {
+  const files = (await changedFiles(pre, post)).filter((f) => !only || only.includes(f.file));
   for (const f of files) {
     if (f.status.startsWith('A')) fs.rmSync(path.join(WORK, f.file), { force: true });
     else if (f.status.startsWith('R')) {

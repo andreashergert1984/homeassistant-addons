@@ -159,6 +159,7 @@ function resultItem(r) {
     ${r.details ? `<div class="md">${md(r.details)}</div>` : ''}
     ${r.test ? `<h3>So prüfst du es</h3><div class="md">${md(r.test)}</div>` : ''}
     ${files.length ? `<div class="files">${files.map((f) => `<code>${esc(f)}</code>`).join('')}</div>` : ''}
+    ${r.changed_by_itself && r.changed_by_itself.length ? `<details><summary>Von Integrationen nebenbei geändert, wird nicht zurückgerollt (${r.changed_by_itself.length})</summary><div class="files">${r.changed_by_itself.map((f) => `<code>${esc(f)}</code>`).join('')}</div></details>` : ''}
     ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}

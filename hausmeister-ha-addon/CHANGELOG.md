@@ -1,3 +1,8 @@
+## 0.5.2
+
+- Zurückrollen setzt nur noch die Dateien der Umsetzung zurück. Dateien, die Integrationen nebenbei ständig neu schreiben (Zigbee2MQTT-Zustand, Anmeldedaten von Integrationen, Registries, Ereignisprotokolle), werden getrennt angezeigt und nie zurückgesetzt; solche Dateien lernt der Hausmeister zusätzlich aus den Sicherungen zwischen den Läufen.
+- HA-Sicherung vor einer Umsetzung als Hintergrundauftrag des Supervisors mit Abfrage (vorher brach die Anfrage nach fünf Minuten mit „fetch failed“ ab).
+
 ## 0.5.1
 
 - Keine HA-Sicherung vor einer Umsetzung, wenn der Konfigurationsordner größer als max_backup_gb ist (Vorgabe 2 GB); eine Teilsicherung enthält immer den ganzen Ordner und dauert dann sehr lange. Die Git-Sicherung läuft weiter.

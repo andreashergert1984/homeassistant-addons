@@ -55,7 +55,7 @@ Runs start at the configured times. Without queued tickets Claude is not started
 - After each implementation the watches compare the system with the state before: configuration
   check, YAML and dashboard files that shrank by more than 30 % or disappeared, entities that
   vanished or became unavailable (checked twice, to ignore restarts).
-- **Zurückrollen** restores the files the implementation changed. If dashboards or helpers in
+- **Zurückrollen** restores the files the implementation changed. Files that integrations rewrite on their own (Zigbee2MQTT state, login data of integrations, registries, event logs) are listed apart and never restored. If dashboards or helpers in
   `.storage` are affected, Home Assistant Core is stopped for the restore and started again,
   otherwise it is restarted after a successful configuration check. Changes made only through the
   API (for example to a device in the registry) are listed in the report and have to be undone by hand.

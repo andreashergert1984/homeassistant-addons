@@ -73,6 +73,24 @@ function promptFor(t, phase, store) {
   return parts.join('\n');
 }
 
+// Partial HA backup as a Supervisor background job, polled until done. A plain
+// request is cut by the HTTP client after five minutes ("fetch failed").
+async function haBackup(name, maxMs) {
+  const r = await ha.sup('POST', '/backups/new/partial', { name, homeassistant: true, homeassistant_exclude_database: true, background: true });
+  const job = r && r.job_id;
+  if (!job) return;
+  const end = Date.now() + maxMs;
+  while (Date.now() < end) {
+    const j = await ha.sup('GET', `/jobs/${job}`);
+    if (j && j.done) {
+      if (j.errors && j.errors.length) throw new Error(j.errors.map((e) => e.message).join('; '));
+      return;
+    }
+    await sleep(10000);
+  }
+  throw new Error(`HA-Sicherung nach ${Math.round(maxMs / 60000)} Minuten noch nicht fertig; Umsetzung läuft mit der Git-Sicherung weiter`);
+}
+
 // Size of a folder in GB (du), null when it cannot be measured in time.
 function folderSizeGb(dir) {
   return new Promise((resolve) => {
@@ -114,6 +132,21 @@ class Runner {
     this.child = null;
     this.pending = new Set();
     this.baselineFile = process.env.HM_BASELINE || '/data/baseline.json';
+  }
+
+  // Files that changed between two run backups without any implementation in
+  // between change on their own; they are remembered as volatile.
+  async learnVolatile(backup) {
+    const d = this.store.data;
+    try {
+      if (backup && d.last_backup && d.last_backup !== backup && !(d.last_impl && d.last_impl > d.last_backup_at)) {
+        const files = (await git.changedFiles(d.last_backup, backup)).map((f) => f.file);
+        d.volatile = [...new Set([...(d.volatile || []), ...files])].slice(-500);
+      }
+    } catch { /* history rewritten or first run */ }
+    d.last_backup = backup;
+    d.last_backup_at = new Date().toISOString();
+    this.store.save();
   }
 
   // Usage of the subscription as reported by Claude Code (rate_limit_event).
@@ -171,6 +204,7 @@ class Runner {
     const run = { at: new Date().toISOString(), reason, by, tickets: [], note: '' };
     try {
       run.backup = await this.backup(reason);
+      await this.learnVolatile(run.backup);
       if (!only) {
         try { run.watchdog = await this.watchdog(); } catch (e) { run.watchdog = [`Wächter: ${e.message}`]; }
       }
@@ -225,6 +259,7 @@ class Runner {
         say('liest den Zustand vorher (für die Wächter)');
         before = await watchSnapshot();
         before.logSince = Date.now() / 1000;
+        this.store.data.last_impl = new Date().toISOString();
         say('sichert die Konfiguration (Git)');
         result.pre = await git.snapshot(`vor #${t.id} ${t.title}`);
         if (this.opts.backup_before_change) {
@@ -238,7 +273,7 @@ class Runner {
           } else {
             say('macht eine HA-Sicherung ohne Datenbank (kann ein paar Minuten dauern)');
             try {
-              await ha.sup('POST', '/backups/new/partial', { name: `Hausmeister vor #${t.id}`, homeassistant: true, homeassistant_exclude_database: true }, { timeoutMs: 30 * 60000 });
+              await haBackup(`Hausmeister vor #${t.id}`, 30 * 60000);
             } catch (e) { result.backup_error = e.message; }
           }
         }
@@ -278,7 +313,13 @@ class Runner {
         await sleep(20000); // HA writes .storage with a delay
         await ha.waitForCore();
         result.post = await git.snapshot(`nach #${t.id} ${t.title}`);
-        result.changed = (await git.changedFiles(result.pre, result.post)).map((f) => f.file);
+        const all = (await git.changedFiles(result.pre, result.post)).map((f) => f.file);
+        const learned = this.store.data.volatile || [];
+        // Files Claude reported or the registries it changes through the API stay in; the rest that
+        // integrations rewrite on their own is listed apart and never rolled back.
+        const named = new Set((result.files || []).map((f) => String(f).replace(/^\/homeassistant\//, '')));
+        result.changed = all.filter((f) => named.has(f) || !L.isVolatile(f, learned));
+        result.changed_by_itself = all.filter((f) => !result.changed.includes(f));
         result.watch = await this.watch(before);
         result.log_errors = await this.newLogErrors(before.logSince);
         t.snapshot = { pre: result.pre, post: result.post };
@@ -346,12 +387,14 @@ class Runner {
     this.busy = true;
     try {
       await git.snapshot(`vor Rückrollung #${t.id}`);
-      const files = await git.changedFiles(t.snapshot.pre, t.snapshot.post);
+      const impl = [...t.results].reverse().find((r) => r.post === t.snapshot.post) || {};
+      const keep = impl.changed || null;
+      const files = (await git.changedFiles(t.snapshot.pre, t.snapshot.post)).filter((f) => !keep || keep.includes(f.file));
       if (!files.length) throw new Error('Die Umsetzung hat keine Dateien geändert; Änderungen über die API bitte von Hand zurücknehmen (siehe Bericht)');
       const storage = files.some((f) => f.file.startsWith('.storage/') || (f.old || '').startsWith('.storage/'));
       if (storage) await ha.sup('POST', '/core/stop', undefined, { timeoutMs: 600000 });
       try {
-        await git.restore(t.snapshot.pre, t.snapshot.post);
+        await git.restore(t.snapshot.pre, t.snapshot.post, files.map((f) => f.file));
       } finally {
         if (storage) await ha.sup('POST', '/core/start', undefined, { timeoutMs: 600000 });
       }

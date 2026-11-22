@@ -129,6 +129,12 @@ test('Fortschritt, Kontingent und Benachrichtigungsknöpfe', () => {
   assert.strictEqual(L.parseNotifyAction('ANDERES'), null);
 });
 
+test('Von selbst geänderte Dateien', () => {
+  for (const f of ['zigbee2mqtt/state.json', '.storage/googlefindmy_secrets_01ABC', '.storage/ha_housekeeper.events', '.storage/meshcore.X.discovered_contacts', '.storage/core.restore_state', '.storage/core.entity_registry']) assert.ok(L.isVolatile(f), f);
+  for (const f of ['configuration.yaml', 'automations.yaml', '.storage/core.config_entries', '.storage/lovelace.klima', 'packages/licht.yaml']) assert.ok(!L.isVolatile(f), f);
+  assert.ok(L.isVolatile('custom/x.json', ['custom/x.json']), 'gelernt');
+});
+
 test('Dateinamen', () => {
   assert.strictEqual(L.slug('Flurlicht über Nacht dimmen!'), 'flurlicht-ueber-nacht-dimmen');
   assert.strictEqual(L.slug('???'), 'ticket');
