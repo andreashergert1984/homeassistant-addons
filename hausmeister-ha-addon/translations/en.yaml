@@ -1,0 +1,25 @@
+configuration:
+  run_times:
+    name: Run times
+    description: Times (HH:MM) at which the queue is processed. Claude is only started when something is queued.
+  auto_draft:
+    name: Draft new tickets right away
+    description: New tickets from the todo list get a draft on the next run. Drafts change nothing.
+  max_tickets_per_run:
+    name: Tickets per run
+    description: Upper limit per run, so the usage quota lasts.
+  run_timeout_minutes:
+    name: Time limit per ticket (minutes)
+    description: The Claude call is stopped afterwards and the ticket is marked as failed.
+  backup_before_change:
+    name: HA backup before each implementation
+    description: Partial Home Assistant backup without the database before each implementation, in addition to the file snapshots.
+  intake_todo:
+    name: Todo list for new tickets
+    description: Items of this list become tickets and are removed from the list. Leave empty to turn it off.
+  notify_service:
+    name: Notification service
+    description: "Optional, e.g. notify.mobile_app_phone. Reports drafts, questions, implementations and watch alarms."
+  model:
+    name: Model
+    description: Optional, e.g. sonnet or opus. Empty uses the Claude Code default.

@@ -1,0 +1,61 @@
+---
+name: Hausmeister
+version: "0.1.0"
+slug: hausmeister
+description: >-
+  Tickets für das Smart Home, die Claude Code nach deiner Freigabe bearbeitet:
+  erst Entwurf, dann Umsetzung, mit Sicherung, Wächtern und Zurückrollen.
+url: https://github.com/andreashergert1984/homeassistant-addons/tree/main/hausmeister-ha-addon
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: true
+
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:account-hard-hat
+panel_title: Hausmeister
+# The board contains a terminal with full access to the configuration.
+panel_admin: true
+
+homeassistant_api: true
+hassio_api: true
+hassio_role: manager
+
+map:
+  - type: homeassistant_config
+    read_only: false
+    path: /homeassistant
+  - type: share
+    read_only: false
+
+# Login of Claude and the large snapshot history stay out of HA backups.
+backup_exclude:
+  - "home/.claude/.credentials.json"
+  - "configgit"
+  - "configgit/*"
+
+options:
+  run_times:
+    - "11:00"
+    - "16:00"
+  auto_draft: true
+  max_tickets_per_run: 5
+  run_timeout_minutes: 30
+  backup_before_change: true
+  intake_todo: todo.hausmeister
+  notify_service: ""
+  model: ""
+
+schema:
+  run_times:
+    - match(^([01]?[0-9]|2[0-3]):[0-5][0-9]$)
+  auto_draft: bool
+  max_tickets_per_run: int(1,20)
+  run_timeout_minutes: int(5,120)
+  backup_before_change: bool
+  intake_todo: str?
+  notify_service: str?
+  model: str?

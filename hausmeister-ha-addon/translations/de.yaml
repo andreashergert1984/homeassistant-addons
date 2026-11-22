@@ -1,0 +1,25 @@
+configuration:
+  run_times:
+    name: Laufzeiten
+    description: Uhrzeiten (HH:MM), zu denen der Hausmeister die Schlange abarbeitet. Steht nichts an, wird Claude nicht gestartet.
+  auto_draft:
+    name: Neue Tickets gleich entwerfen
+    description: Neue Tickets aus der To-do-Liste bekommen beim nächsten Lauf einen Entwurf. Entwürfe ändern nichts.
+  max_tickets_per_run:
+    name: Tickets pro Lauf
+    description: Höchstens so viele Tickets je Lauf, damit das Kontingent reicht.
+  run_timeout_minutes:
+    name: Zeitgrenze pro Ticket (Minuten)
+    description: Danach wird der Claude-Aufruf abgebrochen und das Ticket als Fehler markiert.
+  backup_before_change:
+    name: HA-Sicherung vor jeder Umsetzung
+    description: Teilsicherung von Home Assistant ohne Datenbank vor jeder Umsetzung, zusätzlich zur eigenen Dateisicherung.
+  intake_todo:
+    name: To-do-Liste für neue Tickets
+    description: Einträge dieser Liste werden zu Tickets und aus der Liste entfernt. Leer lassen, um das auszuschalten.
+  notify_service:
+    name: Benachrichtigungsdienst
+    description: "Optional, z. B. notify.mobile_app_handy. Meldet Entwürfe, Rückfragen, Umsetzungen und Wächter-Alarme."
+  model:
+    name: Modell
+    description: Optional, z. B. sonnet oder opus. Leer bedeutet die Vorgabe von Claude Code.

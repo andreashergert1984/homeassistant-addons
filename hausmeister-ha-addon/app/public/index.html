@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hausmeister</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <h1>Hausmeister</h1>
+  <div id="status" class="status"></div>
+  <nav>
+    <button data-tab="tickets" class="active">Tickets</button>
+    <button data-tab="neu">Neues Ticket</button>
+    <button data-tab="laeufe">Läufe</button>
+    <button data-tab="sicherungen">Sicherungen</button>
+    <button data-tab="anmeldung">Anmeldung</button>
+  </nav>
+</header>
+<main>
+  <section id="tab-tickets"><div id="list"></div><div id="detail" hidden></div></section>
+  <section id="tab-neu" hidden>
+    <form id="newform">
+      <label>Was soll passieren?<input name="title" required maxlength="200" placeholder="z. B. Flurlicht nachts nur gedimmt einschalten"></label>
+      <label>Beschreibung<textarea name="text" rows="6" placeholder="Was genau, wo, warum. Je konkreter, desto besser der Entwurf."></textarea></label>
+      <label class="row"><input type="checkbox" name="draft" checked> Claude soll beim nächsten Lauf einen Entwurf machen</label>
+      <button type="submit" class="primary">Ticket anlegen</button>
+      <p class="hint">Tickets lassen sich auch über die To-do-Liste „Hausmeister“ anlegen, auch per Sprache. Umgesetzt wird nie ohne deine Freigabe.</p>
+    </form>
+  </section>
+  <section id="tab-laeufe" hidden><div id="runs"></div></section>
+  <section id="tab-sicherungen" hidden>
+    <p class="hint">Der Hausmeister sichert die Konfiguration bei jedem Lauf und vor und nach jeder Umsetzung (Datenbanken, Logs und Anmeldedaten ausgenommen). Zurückrollen geht im jeweiligen Ticket.</p>
+    <div id="backups"></div>
+  </section>
+  <section id="tab-anmeldung" hidden>
+    <div class="hint" id="loginhint"></div>
+    <iframe id="term" title="Terminal"></iframe>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
