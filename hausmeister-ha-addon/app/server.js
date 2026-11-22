@@ -171,7 +171,7 @@ function readBody(req) {
 }
 
 function view(t, full) {
-  const base = { id: t.id, title: t.title, state: t.state, state_label: L.STATES[t.state], updated: t.updated, created: t.created, created_by: t.created_by };
+  const base = { id: t.id, title: t.title, state: t.state, state_label: L.STATES[t.state], updated: t.updated, created: t.created, created_by: t.created_by, source: t.source, kind: t.kind || 'ticket', direct: !!t.direct };
   if (!full) return { ...base, summary: (t.results[t.results.length - 1] || {}).summary || '' };
   return { ...t, ...base, actions: L.actionsFor(t), can_rollback: !!(t.snapshot && t.snapshot.post && ['umgesetzt', 'pruefen', 'erledigt', 'fehler'].includes(t.state)) };
 }

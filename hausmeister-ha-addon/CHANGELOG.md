@@ -1,3 +1,9 @@
+## 0.4.0
+
+- Neues Design: Kennzahlen oben (wartet auf dich, in Arbeit, erledigt, Kontingent), Karten mit Farbstreifen, Herkunft und relativer Zeit, Live-Streifen während Claude arbeitet.
+- Ticket mit Fortschrittsleiste (Eingang, Entwurf, Freigabe, Umsetzung, Abnahme), Ergebnisse als Zeitleiste, Kommentare als Sprechblasen.
+- Modus beim Anlegen als Auswahlkarten, schwebender Plus-Knopf auf dem Handy, dunkler Modus überarbeitet.
+
 ## 0.3.1
 
 - Rückfrage steht oben im Ticket, „Antwort senden“ ist hervorgehoben; Reiterleiste ohne Scrollbalken auf dem Handy.

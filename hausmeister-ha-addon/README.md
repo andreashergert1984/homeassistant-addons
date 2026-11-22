@@ -40,14 +40,16 @@ keinen weiteren Rechner.
 | --- | --- |
 | ![Entwurf](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/entwurf.png) | ![Neues Ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/neues-ticket.png) |
 
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Rückfrage auf dem Handy" width="300" align="right">
+**Auf dem Handy** (hier im dunklen Modus): Übersicht mit Kennzahlen und eine Rückfrage von Claude. Die Antwort
+geht über das Feld im Ticket oder direkt aus der Push-Meldung.
 
-**Auf dem Handy** (hier im dunklen Modus): Claude hat eine Rückfrage, die Antwort geht über das
-Kommentarfeld oder direkt aus der Push-Meldung.
+<p>
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-liste.png" alt="Ticketliste auf dem Handy" width="260">
+&nbsp;
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Rückfrage auf dem Handy" width="260">
+</p>
 
 Die Bilder zeigen erfundene Beispieltickets.
-
-<br clear="right">
 
 ## Voraussetzungen
 

@@ -7,9 +7,15 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header>
-  <h1>Hausmeister</h1>
-  <div id="status" class="status"></div>
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7v2H3.5a1 1 0 0 0 0 2h17a1 1 0 0 0 0-2H19v-2a7 7 0 0 0-5-6.71V5a1 1 0 0 0-2 0v-.93zM11 5.08V9a1 1 0 0 0 2 0V5.08A5 5 0 0 1 17 10v2H7v-2a5 5 0 0 1 4-4.92zM6 16a1 1 0 0 0 0 2h12a1 1 0 0 0 0-2z"/></svg>
+    <div>
+      <h1>Hausmeister</h1>
+      <div class="sub" id="sub">Smart-Home-Tickets mit Claude</div>
+    </div>
+  </div>
+  <div class="topactions" id="topactions"></div>
   <nav>
     <button data-tab="tickets" class="active">Tickets</button>
     <button data-tab="neu">Neues Ticket</button>
@@ -19,31 +25,42 @@
   </nav>
 </header>
 <main>
-  <section id="tab-tickets"><div id="list"></div><div id="detail" hidden></div></section>
+  <section id="tab-tickets">
+    <div id="live"></div>
+    <div id="stats" class="stats"></div>
+    <div id="list"></div>
+    <div id="detail" hidden></div>
+  </section>
   <section id="tab-neu" hidden>
-    <form id="newform">
+    <form id="newform" class="panel">
+      <h2>Neues Ticket</h2>
       <label>Was soll passieren?<input name="title" required maxlength="200" placeholder="z. B. Flurlicht nachts nur gedimmt einschalten"></label>
-      <label>Beschreibung<textarea name="text" rows="6" placeholder="Was genau, wo, warum. Je konkreter, desto besser der Entwurf."></textarea></label>
-      <fieldset class="modes">
-        <legend>Wie soll es laufen?</legend>
-        <label class="row"><input type="radio" name="mode" value="entwurf" checked> Erst Entwurf beim nächsten Lauf, dann gebe ich frei</label>
-        <label class="row"><input type="radio" name="mode" value="sofort"> Sofort umsetzen, ohne Entwurf (bei riskanten Dingen fragt Claude trotzdem nach)</label>
-        <label class="row"><input type="radio" name="mode" value="sammeln"> Nur sammeln, noch nichts tun</label>
-      </fieldset>
-      <button type="submit" class="primary">Ticket anlegen</button>
-      <p class="hint">Tickets lassen sich auch über die To-do-Liste „Hausmeister“ anlegen, auch per Sprache. Ohne Sofort-Modus wird nichts ohne deine Freigabe umgesetzt. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt.</p>
+      <label>Beschreibung<textarea name="text" rows="5" placeholder="Was genau, wo, warum. Je konkreter, desto besser der Entwurf."></textarea></label>
+      <div class="modes" role="radiogroup" aria-label="Wie soll es laufen?">
+        <label class="mode"><input type="radio" name="mode" value="entwurf" checked><span class="mt">Erst Entwurf</span><span class="md2">Claude schaut sich beim nächsten Lauf alles an und schlägt vor. Du gibst frei.</span></label>
+        <label class="mode"><input type="radio" name="mode" value="sofort"><span class="mt">Sofort umsetzen</span><span class="md2">Startet jetzt, ohne Entwurf. Bei riskanten Dingen fragt Claude trotzdem nach.</span></label>
+        <label class="mode"><input type="radio" name="mode" value="sammeln"><span class="mt">Nur sammeln</span><span class="md2">Kommt auf die Liste, es passiert noch nichts.</span></label>
+      </div>
+      <button type="submit" class="primary big">Ticket anlegen</button>
+      <p class="hint">Tickets gehen auch über die To-do-Liste „Hausmeister“, per Sprache oder aus Automationen. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt. Ohne Sofort-Modus wird nichts ohne deine Freigabe geändert.</p>
     </form>
   </section>
-  <section id="tab-laeufe" hidden><div id="runs"></div></section>
+  <section id="tab-laeufe" hidden><div id="runs" class="panel"></div></section>
   <section id="tab-sicherungen" hidden>
-    <p class="hint">Der Hausmeister sichert die Konfiguration bei jedem Lauf und vor und nach jeder Umsetzung (Datenbanken, Logs und Anmeldedaten ausgenommen). Zurückrollen geht im jeweiligen Ticket.</p>
-    <div id="backups"></div>
+    <div class="panel">
+      <h2>Sicherungen</h2>
+      <p class="hint">Bei jedem Lauf und vor und nach jeder Umsetzung wird die Konfiguration gesichert (ohne Datenbanken, Logs, Anmeldedaten und sehr große Dateien). Zurückrollen geht im jeweiligen Ticket.</p>
+      <div id="backups"></div>
+    </div>
   </section>
   <section id="tab-anmeldung" hidden>
-    <div class="hint" id="loginhint"></div>
-    <iframe id="term" title="Terminal"></iframe>
+    <div class="panel">
+      <div class="hint" id="loginhint"></div>
+      <iframe id="term" title="Terminal"></iframe>
+    </div>
   </section>
 </main>
+<button class="fab" id="fab" title="Neues Ticket" aria-label="Neues Ticket">+</button>
 <script src="app.js"></script>
 </body>
 </html>

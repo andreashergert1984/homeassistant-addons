@@ -8,16 +8,37 @@ let openId = null;
 
 const GROUPS = [
   { title: 'Wartet auf dich', states: ['rueckfrage', 'pruefen', 'fehler', 'entwurf', 'umgesetzt'] },
-  { title: 'In der Schlange', states: ['in_arbeit', 'umsetzen', 'entwerfen'] },
-  { title: 'Neu', states: ['neu'] },
+  { title: 'In Arbeit und in der Schlange', states: ['in_arbeit', 'umsetzen', 'entwerfen'] },
+  { title: 'Gesammelt', states: ['neu'] },
   { title: 'Abgeschlossen', states: ['erledigt', 'zurueckgerollt', 'verworfen'], closed: true },
 ];
-const TONE = { rueckfrage: 'warn', pruefen: 'bad', fehler: 'bad', entwurf: 'warn', umgesetzt: 'warn', erledigt: 'ok' };
+const TONE = { rueckfrage: 'warn', pruefen: 'bad', fehler: 'bad', entwurf: 'warn', umgesetzt: 'warn', erledigt: 'ok', in_arbeit: 'info', umsetzen: 'info', entwerfen: 'info' };
+
+// Small Material Design icons (Apache 2.0), inline so nothing is loaded from outside.
+const ICON = {
+  todo: 'M3 5h2v2H3zm4 0h14v2H7zM3 11h2v2H3zm4 0h14v2H7zm-4 6h2v2H3zm4 0h14v2H7z',
+  board: 'M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z',
+  event: 'M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5 2.5 2.5 0 0 0-2.5-2.5z',
+  rundgang: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14',
+  bolt: 'M11 15H6l7-14v8h5l-7 14z',
+  check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+};
+const SOURCE = { todo: ['todo', 'To-do-Liste'], board: ['board', 'Board'], event: ['event', 'Automation'], rundgang: ['rundgang', 'Rundgang'] };
+const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[k]}"/></svg>`;
 
 function fmt(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function ago(iso) {
+  if (!iso) return '';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return 'gerade eben';
+  if (s < 3600) return `vor ${Math.round(s / 60)} Min.`;
+  if (s < 86400) return `vor ${Math.round(s / 3600)} Std.`;
+  if (s < 7 * 86400) { const d = Math.round(s / 86400); return d === 1 ? 'gestern' : `vor ${d} Tagen`; }
+  return fmt(iso);
 }
 
 // Small, safe Markdown: escapes first, then code blocks, inline code, bold, headings, lists.
@@ -46,75 +67,130 @@ async function api(path, body) {
   return data;
 }
 
-function badge(t) { return `<span class="badge ${TONE[t.state] || ''}">${esc(t.state_label)}</span>`; }
+const chip = (t) => `<span class="chip ${TONE[t.state] || ''}">${esc(t.state_label)}</span>`;
+function source(t) {
+  if (t.kind === 'rundgang') return `<span class="src">${svg('rundgang')}Rundgang</span>`;
+  const [icon, label] = SOURCE[t.source] || SOURCE.board;
+  const who = t.created_by && !['To-do-Liste', 'Automation', 'Zeitplan', 'Rundgang', 'unbekannt'].includes(t.created_by) ? ` · ${esc(t.created_by)}` : '';
+  return `<span class="src">${svg(icon)}${label}${who}</span>`;
+}
 
-function renderStatus() {
+function renderTop() {
   const s = state;
-  const cur = s.current ? `läuft gerade: #${s.current.id} (${s.current.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'}): ${s.current.step || ''}` : '';
-  const q = s.quota && s.quota.utilization != null ? Math.round(s.quota.utilization * 100) : null;
-  const qText = q == null ? '' : `<span class="badge ${s.quota_blocked ? 'bad' : q >= 60 ? 'warn' : ''}" title="Auslastung des Abos laut Claude Code (${esc(s.quota.window)}), Grenze für geplante Läufe ${s.max_quota_percent} %${s.quota.resetsAt ? `, erneuert ${new Date(s.quota.resetsAt * 1000).toLocaleString('de-DE')}` : ''}">Kontingent ${q} %${s.quota_blocked ? ', geplante Läufe pausiert' : ''}</span>`;
-  $('#status').innerHTML = [
-    s.logged_in ? '<span class="badge ok">Claude angemeldet</span>' : '<span class="badge bad">Claude nicht angemeldet</span>',
-    qText,
-    `<span>Nächster Lauf: ${esc(s.next_run)}</span>`,
-    cur ? `<span class="badge warn">${esc(cur)}</span>` : '',
-    `<button id="runnow" ${s.busy ? 'disabled' : ''}>Jetzt ausführen</button>`,
-    s.busy ? '<button id="cancel" class="danger">Lauf abbrechen</button>' : '',
-  ].join(' ');
-  $('#runnow').onclick = async () => { try { await api('api/run', {}); await load(); } catch (e) { alert(e.message); } };
+  $('#sub').textContent = s.logged_in ? `Nächster Lauf ${s.next_run}` : 'Claude ist nicht angemeldet';
+  $('#topactions').innerHTML = s.busy
+    ? '<button id="cancel" class="danger">Abbrechen</button>'
+    : `<button id="runnow" class="primary" title="Alles, was ansteht, jetzt bearbeiten">${svg('bolt').replace('<svg', '<svg style="width:16px;height:16px;fill:currentColor;vertical-align:-3px"')} <span class="runlabel">Jetzt ausführen</span></button>`;
+  if ($('#runnow')) $('#runnow').onclick = async () => { try { await api('api/run', {}); await load(); } catch (e) { alert(e.message); } };
   if ($('#cancel')) $('#cancel').onclick = async () => { if (confirm('Den laufenden Claude-Aufruf abbrechen?')) { await api('api/cancel', {}); await load(); } };
 }
 
-function renderList() {
+function renderLive() {
+  const c = state.current;
+  const login = !state.logged_in ? '<div class="box ask"><strong>Claude ist nicht angemeldet.</strong> Im Reiter „Anmeldung“ einloggen, sonst bleiben die Tickets liegen.</div>' : '';
   const wd = state.watchdog && (Date.now() - new Date(state.watchdog.at).getTime()) < 3 * 86400000
-    ? `<div class="box alarm"><strong>Wächter ${fmt(state.watchdog.at)}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">Nicht durch den Hausmeister verursacht. Prüfen, ob es gewollt war.</span></div>` : '';
-  const html = wd + GROUPS.map((g) => {
+    ? `<div class="box alarm"><strong>Wächter ${ago(state.watchdog.at)}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">Nicht durch den Hausmeister verursacht. Prüfen, ob es gewollt war.</span></div>` : '';
+  const live = c ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet an #${c.id} (${c.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'})</b><span>${esc(c.step || 'startet')}</span></div><button data-open="${c.id}">Ansehen</button></div>` : '';
+  $('#live').innerHTML = login + wd + live;
+  document.querySelectorAll('#live [data-open]').forEach((b) => { b.onclick = () => openTicket(Number(b.dataset.open)); });
+}
+
+function renderStats() {
+  const t = state.tickets;
+  const count = (st) => t.filter((x) => st.includes(x.state)).length;
+  const week = t.filter((x) => x.state === 'erledigt' && Date.now() - new Date(x.updated).getTime() < 7 * 86400000).length;
+  const q = state.quota && state.quota.utilization != null ? Math.round(state.quota.utilization * 100) : null;
+  const qTone = state.quota_blocked ? 'bad' : q >= 60 ? 'warn' : '';
+  const qTitle = q == null ? 'Wird nach dem nächsten Lauf angezeigt' : `Auslastung des Abos (${state.quota.window}), geplante Läufe pausieren ab ${state.max_quota_percent} %${state.quota.resetsAt ? `, erneuert ${new Date(state.quota.resetsAt * 1000).toLocaleString('de-DE')}` : ''}`;
+  const wait = count(GROUPS[0].states);
+  $('#stats').innerHTML = [
+    `<div class="stat ${wait ? 'warn' : ''}"><div class="n">${wait}</div><div class="l">warten auf dich</div></div>`,
+    `<div class="stat"><div class="n">${count(GROUPS[1].states)}</div><div class="l">in Arbeit oder Schlange</div></div>`,
+    `<div class="stat"><div class="n">${week}</div><div class="l">erledigt in 7 Tagen</div></div>`,
+    `<div class="stat" title="${esc(qTitle)}"><div class="n">${q == null ? '–' : `${q} %`}</div><div class="l">Kontingent${state.quota_blocked ? ', Läufe pausiert' : ''}</div><div class="bar"><span class="${qTone}" style="width:${q || 0}%"></span></div></div>`,
+  ].join('');
+}
+
+function renderList() {
+  const html = GROUPS.map((g) => {
     const items = state.tickets.filter((t) => g.states.includes(t.state));
     if (!items.length) return '';
-    const cards = items.map((t) => `<div class="card" data-id="${t.id}"><div class="t">#${t.id} ${esc(t.title)}</div><div class="s">${badge(t)} ${fmt(t.updated)}${t.summary ? ` · ${esc(t.summary)}` : ''}</div></div>`).join('');
-    return g.closed ? `<details class="group"><summary>${g.title} (${items.length})</summary>${cards}</details>` : `<div class="group"><h2>${g.title} (${items.length})</h2>${cards}</div>`;
+    const cards = items.map((t) => `<div class="card ${TONE[t.state] || ''}" data-id="${t.id}">
+      <div class="t"><span class="id">#${t.id}</span><span>${esc(t.title)}</span></div>
+      <div class="row">${chip(t)}${t.direct && ['umsetzen', 'in_arbeit'].includes(t.state) ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">${ago(t.updated)}</span></div>
+      ${t.summary ? `<div class="sum">${esc(t.summary)}</div>` : ''}</div>`).join('');
+    const head = `<div class="ghead">${g.title}<span class="count">${items.length}</span></div>`;
+    return g.closed ? `<details class="group"><summary>${head}</summary>${cards}</details>` : `<div class="group">${head}${cards}</div>`;
   }).join('');
-  $('#list').innerHTML = html || '<p class="hint">Noch keine Tickets. Lege eins an oder schreib es auf die To-do-Liste „Hausmeister“.</p>';
+  $('#list').innerHTML = html || `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Alles erledigt.</strong></div><div class="hint">Neue Wünsche auf die To-do-Liste „Hausmeister“ schreiben oder hier anlegen.</div></div>`;
   document.querySelectorAll('.card').forEach((c) => { c.onclick = () => openTicket(Number(c.dataset.id)); });
 }
 
-function resultBox(r) {
+// Progress of a ticket: collected, draft, approval, implementation, acceptance.
+function stepper(t) {
+  const steps = ['Eingang', 'Entwurf', 'Freigabe', 'Umsetzung', 'Abnahme'];
+  const phase = t.state === 'in_arbeit' ? (t.phase === 'umsetzen' ? 'umsetzen' : 'entwerfen') : t.state;
+  const at = { neu: [0, 'now'], entwerfen: [1, 'now'], rueckfrage: [t.phase === 'umsetzen' ? 3 : 1, 'wait'], entwurf: [2, 'wait'], umsetzen: [3, 'now'], fehler: [t.phase === 'umsetzen' ? 3 : 1, 'wait'], umgesetzt: [4, 'wait'], pruefen: [4, 'wait'], erledigt: [5, ''] }[phase];
+  if (!at) return '';
+  const skip = t.direct;
+  return `<div class="stepper">${steps.map((name, i) => {
+    let cls = i < at[0] ? 'done' : i === at[0] ? at[1] : '';
+    if (skip && (i === 1 || i === 2) && i !== at[0]) cls = 'skip';
+    const mark = cls === 'done' ? '✓' : String(i + 1);
+    return `<div class="st ${cls}"><div class="c">${mark}</div><div class="l">${name}</div></div>`;
+  }).join('')}</div>${at[0] < 5 ? `<div class="stepnow">Schritt ${at[0] + 1} von 5: ${steps[at[0]]}</div>` : ''}`;
+}
+
+function resultItem(r) {
   const title = r.phase === 'umsetzen' ? 'Umsetzung' : r.phase === 'rueckrollung' ? 'Rückrollung' : 'Entwurf';
   const alarm = r.watch && r.watch.length;
-  return `<div class="box ${alarm ? 'alarm' : ''}"><div class="meta">${title} vom ${fmt(r.at)} · ${esc(r.kind)}${r.turns ? ` · ${r.turns} Schritte` : ''}</div>
-    ${r.summary ? `<p><strong>${esc(r.summary)}</strong></p>` : ''}
-    ${r.question ? `<p class="badge warn">Rückfrage</p><p>${esc(r.question)}</p>` : ''}
+  const tone = alarm || r.kind === 'fehler' ? 'bad' : r.kind === 'rueckfrage' ? 'warn' : r.kind === 'umgesetzt' || r.kind === 'zurueckgerollt' ? 'ok' : '';
+  const files = [...new Set([...(r.changed || []), ...(r.api || [])])];
+  return `<div class="tl ${tone}"><div class="box ${alarm ? 'alarm' : ''}">
+    <div class="head"><strong>${title}</strong><span class="meta">${fmt(r.at)}${r.turns ? ` · ${r.turns} Schritte` : ''}</span></div>
+    ${r.summary ? `<div class="lead">${esc(r.summary)}</div>` : ''}
+    ${r.question ? `<div class="box ask"><strong>Rückfrage:</strong> ${esc(r.question)}</div>` : ''}
     ${r.details ? `<div class="md">${md(r.details)}</div>` : ''}
     ${r.test ? `<h3>So prüfst du es</h3><div class="md">${md(r.test)}</div>` : ''}
-    ${r.changed && r.changed.length ? `<p class="meta">Geänderte Dateien laut Sicherung: ${esc(r.changed.join(', '))}</p>` : ''}
-    ${r.api && r.api.length ? `<p class="meta">Über die API geändert: ${esc(r.api.join(', '))}</p>` : ''}
+    ${files.length ? `<div class="files">${files.map((f) => `<code>${esc(f)}</code>`).join('')}</div>` : ''}
     ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
-    ${r.steps && r.steps.length ? `<details><summary>Schritte (${r.steps.length})</summary><ol class="meta">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
     ${r.message ? `<p class="meta">Meldung: ${esc(r.message)}</p>` : ''}
-    ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}</div>`;
+    ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}
+    ${r.steps && r.steps.length ? `<details><summary>Was Claude getan hat (${r.steps.length} Schritte)</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
+  </div></div>`;
 }
+
+const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
 
 async function openTicket(id) {
   openId = id;
   const t = await api(`api/tickets/${id}`);
-  const results = [...t.results].reverse().map(resultBox).join('');
-  const comments = t.comments.map((c) => `<div class="box"><div class="meta">${esc(c.by)} · ${fmt(c.at)}</div>${esc(c.text)}</div>`).join('');
+  const last = t.results[t.results.length - 1];
   const needs = t.actions.some((a) => a.comment);
-  $('#detail').innerHTML = `<button class="back">← Zur Liste</button>
-    <h2>#${t.id} ${esc(t.title)}</h2><div>${badge(t)} <span class="meta">angelegt ${fmt(t.created)} von ${esc(t.created_by)}</span></div>
-    ${t.text ? `<div class="box md">${md(t.text)}</div>` : ''}
-    ${t.state === 'rueckfrage' && t.results.length && t.results[t.results.length - 1].question ? `<div class="box ask"><strong>Claude fragt:</strong> ${esc(t.results[t.results.length - 1].question)}<div class="meta">Antwort ins Kommentarfeld schreiben und „Antwort senden“ drücken.</div></div>` : ''}
-    ${state.current && state.current.id === t.id ? `<div class="box"><strong>Claude arbeitet gerade:</strong> ${esc(state.current.step || '')}<ol class="meta">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol></div>` : ''}
-    <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' || a.key === 'antworten' || (a.key === 'sofort' && t.state !== 'rueckfrage') ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
-      ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
-    <label>${needs ? 'Kommentar (für Antwort und Nachbessern nötig)' : 'Kommentar'}<textarea id="comment" rows="3"></textarea></label>
-    <button id="addcomment">Nur kommentieren</button>
-    ${results ? `<h2>Ergebnisse</h2>${results}` : ''}
-    ${comments ? `<h2>Kommentare</h2>${comments}` : ''}
-    <details><summary>Verlauf</summary><table>${t.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(h.by)}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
+  const primary = (k) => k === 'umsetzen' || k === 'abnehmen' || k === 'antworten' || (k === 'sofort' && !t.actions.some((a) => a.key === 'umsetzen') && t.state !== 'rueckfrage');
+  const running = state.current && state.current.id === t.id;
+  $('#detail').innerHTML = `<button class="back">← Alle Tickets</button>
+    <div class="dhead">
+      <h2><span class="meta">#${t.id}</span> ${esc(t.title)}</h2>
+      <div class="row">${chip(t)}${t.direct ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">angelegt ${ago(t.created)}</span></div>
+      ${t.text ? `<div class="desc md">${md(t.text)}</div>` : ''}
+      ${stepper(t)}
+    </div>
+    ${t.state === 'rueckfrage' && last && last.question ? `<div class="box ask"><strong>Claude fragt:</strong> ${esc(last.question)}<div class="meta">Antwort unten eintragen und „Antwort senden“ drücken.</div></div>` : ''}
+    ${running ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet gerade</b><span>${esc(state.current.step || '')}</span></div></div><ol class="steps">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol>` : ''}
+    ${t.actions.length || t.can_rollback || !running ? `<div class="box composer">
+      <textarea id="comment" rows="2" placeholder="${needs ? 'Antwort oder was anders sein soll' : 'Kommentar (optional)'}"></textarea>
+      <div class="row"><div class="actionbar">${t.actions.map((a) => `<button data-a="${a.key}" class="${primary(a.key) ? 'primary' : a.key === 'sofort' ? 'soft' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
+        ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
+        <button id="addcomment">Nur kommentieren</button></div>
+    </div>` : ''}
+    ${t.comments.length ? `<div class="sec">Kommentare</div>${t.comments.map((c) => `<div class="comment"><div class="avatar">${esc(initials(c.by))}</div><div class="bubble"><div class="meta">${esc(c.by)} · ${ago(c.at)}</div>${esc(c.text)}</div></div>`).join('')}` : ''}
+    ${t.results.length ? `<div class="sec">Verlauf der Arbeit</div><div class="timeline">${[...t.results].reverse().map(resultItem).join('')}</div>` : ''}
+    <details><summary>Alle Zustandswechsel</summary><table>${t.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(h.by)}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
   $('#list').hidden = true;
+  $('#stats').hidden = true;
   $('#detail').hidden = false;
   $('#detail .back').onclick = closeTicket;
   document.querySelectorAll('#detail [data-open]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); openTicket(Number(a.dataset.open)); }; });
@@ -126,10 +202,10 @@ async function openTicket(id) {
         : 'Claude plant und setzt jetzt sofort um, ohne dass du vorher einen Entwurf siehst. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
       if (a === 'umsetzen' && !confirm('Claude setzt den Entwurf beim nächsten Lauf um. Vorher wird gesichert. Freigeben?')) return;
       if (a === 'verwerfen' && !confirm('Ticket verwerfen?')) return;
-      try { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment').value }); await load(); await openTicket(id); } catch (e) { alert(e.message); }
+      try { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment') ? $('#comment').value : '' }); await load(); await openTicket(id); } catch (e) { alert(e.message); }
     };
   });
-  $('#addcomment').onclick = async () => { try { await api(`api/tickets/${id}/comment`, { text: $('#comment').value }); await openTicket(id); } catch (e) { alert(e.message); } };
+  if ($('#addcomment')) $('#addcomment').onclick = async () => { try { await api(`api/tickets/${id}/comment`, { text: $('#comment').value }); await openTicket(id); } catch (e) { alert(e.message); } };
   if ($('#rollback')) {
     $('#rollback').onclick = async () => {
       if (!confirm('Die Dateien, die diese Umsetzung geändert hat, auf den Stand davor zurücksetzen? Dafür wird Home Assistant neu gestartet (bei Dashboards und Helfern kurz gestoppt).')) return;
@@ -138,42 +214,49 @@ async function openTicket(id) {
   }
 }
 
-function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; }
+function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; $('#stats').hidden = false; }
 
 function renderRuns() {
-  $('#runs').innerHTML = state.runs.length ? `<table><tr><th>Zeit</th><th>Anlass</th><th>Ergebnis</th></tr>${state.runs.map((r) => `<tr><td>${fmt(r.at)}</td><td>${esc(r.reason)}${r.by && r.by !== 'Zeitplan' ? ` (${esc(r.by)})` : ''}</td><td>${r.tickets.map((x) => `#${x.id} ${esc(x.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf')}: ${esc(x.kind)}`).join('<br>')}${r.note ? `<span class="meta">${esc(r.note)}</span>` : ''}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Läufe.</p>';
+  const kind = { entwurf: 'Entwurf fertig', umgesetzt: 'umgesetzt', rueckfrage: 'Rückfrage', fehler: 'Fehler', kontingent: 'Kontingent erschöpft', anmeldung: 'Anmeldung fehlt' };
+  $('#runs').innerHTML = `<h2>Läufe</h2>${state.runs.length ? `<table><tr><th>Wann</th><th>Anlass</th><th>Ergebnis</th></tr>${state.runs.map((r) => `<tr><td>${fmt(r.at)}</td><td>${esc(r.reason)}${r.by && r.by !== 'Zeitplan' ? `<br><span class="meta">${esc(r.by)}</span>` : ''}</td><td>${r.tickets.map((x) => `<a href="#" data-open="${x.id}">#${x.id}</a> ${esc(x.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf')}: ${esc(kind[x.kind] || x.kind)}`).join('<br>')}${r.note ? `<span class="meta">${esc(r.note)}</span>` : ''}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Läufe.</p>'}`;
+  document.querySelectorAll('#runs [data-open]').forEach((a) => {
+    a.onclick = (e) => { e.preventDefault(); showTab('tickets'); openTicket(Number(a.dataset.open)); };
+  });
 }
 
 async function renderBackups() {
   try {
     const list = await api('api/backups');
-    $('#backups').innerHTML = `<table>${list.map((b) => `<tr><td>${fmt(b.at)}</td><td>${esc(b.msg)}</td><td class="meta">${esc(b.id.slice(0, 8))}</td></tr>`).join('')}</table>`;
+    $('#backups').innerHTML = list.length ? `<table><tr><th>Wann</th><th>Anlass</th><th></th></tr>${list.map((b) => `<tr><td>${fmt(b.at)}</td><td>${esc(b.msg)}</td><td class="meta">${esc(b.id.slice(0, 8))}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Sicherung.</p>';
   } catch (e) { $('#backups').textContent = e.message; }
 }
 
 function renderLogin() {
   $('#loginhint').innerHTML = state.logged_in
-    ? '<p>Claude ist angemeldet. Das Terminal brauchst du nur, um die Anmeldung zu erneuern oder etwas nachzusehen.</p>'
-    : '<p><strong>Anmelden:</strong> im Terminal unten <code>claude</code> eingeben, dann <code>/login</code>, „Claude account with subscription“ wählen, den Link im Browser öffnen, den Code zurück ins Terminal kopieren. Danach mit <code>/exit</code> beenden.</p>';
+    ? '<h2>Anmeldung</h2><p>Claude ist angemeldet. Das Terminal brauchst du nur, um die Anmeldung zu erneuern oder etwas nachzusehen.</p>'
+    : '<h2>Bei Claude anmelden</h2><ol><li>Im Terminal unten <code>claude</code> eingeben, dann <code>/login</code>.</li><li>„Claude account with subscription“ wählen und den Link im Browser öffnen.</li><li>Den Code zurück ins Terminal kopieren, dann mit <code>/exit</code> beenden.</li></ol>';
   if (!$('#term').src) $('#term').src = 'terminal/';
 }
 
 async function load() {
   state = await api('api/state');
-  renderStatus();
+  renderTop();
+  renderLive();
+  renderStats();
   renderList();
   renderRuns();
 }
 
-document.querySelectorAll('nav button').forEach((b) => {
-  b.onclick = () => {
-    document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('active', x === b));
-    document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== `tab-${b.dataset.tab}`; });
-    if (b.dataset.tab === 'sicherungen') renderBackups();
-    if (b.dataset.tab === 'anmeldung') renderLogin();
-    if (b.dataset.tab === 'tickets') closeTicket();
-  };
-});
+function showTab(tab) {
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('active', x.dataset.tab === tab));
+  document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== `tab-${tab}`; });
+  $('#fab').hidden = tab === 'neu';
+  if (tab === 'sicherungen') renderBackups();
+  if (tab === 'anmeldung') renderLogin();
+  if (tab === 'tickets') closeTicket();
+}
+document.querySelectorAll('nav button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+$('#fab').onclick = () => { showTab('neu'); $('#newform').elements.title.focus(); };
 
 $('#newform').onsubmit = async (e) => {
   e.preventDefault();
@@ -183,7 +266,7 @@ $('#newform').onsubmit = async (e) => {
     const t = await api('api/tickets', { title: f.elements.title.value, text: f.elements.text.value, mode: f.elements.mode.value });
     f.reset();
     await load();
-    document.querySelector('nav button[data-tab="tickets"]').click();
+    showTab('tickets');
     await openTicket(t.id);
   } catch (err) { alert(err.message); }
 };
