@@ -73,6 +73,46 @@ async function api(path, body) {
   return data;
 }
 
+// ---- small UX helpers --------------------------------------------------------
+// Open <details> survive the periodic re-render (otherwise they snap shut every 15 s).
+const openDetails = new Set();
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (d.tagName === 'DETAILS' && d.dataset.k) { if (d.open) openDetails.add(d.dataset.k); else openDetails.delete(d.dataset.k); }
+}, true);
+function restoreDetails(root) {
+  root.querySelectorAll('details[data-k]').forEach((d) => { if (openDetails.has(d.dataset.k)) d.open = true; });
+}
+
+// Unsent comments per ticket survive the re-render.
+const drafts = {};
+
+function toast(msg, tone = '') {
+  let box = $('#toasts');
+  if (!box) { box = document.createElement('div'); box.id = 'toasts'; document.body.appendChild(box); }
+  const el = document.createElement('div');
+  el.className = `toast ${tone}`;
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, tone === 'bad' ? 6000 : 3500);
+}
+
+// Runs an action from a button: disables it meanwhile, shows errors as a toast.
+async function act(btn, fn, okMsg) {
+  if (btn.disabled) return;
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('busy');
+  try {
+    await fn();
+    if (okMsg) toast(okMsg, 'ok');
+  } catch (e) {
+    toast(e.message, 'bad');
+  } finally {
+    if (btn.isConnected) { btn.disabled = false; btn.classList.remove('busy'); btn.innerHTML = label; }
+  }
+}
+
 const chip = (t) => `<span class="chip ${TONE[t.state] || ''}">${esc(t.state_label)}</span>`;
 function source(t) {
   if (t.kind === 'rundgang') return `<span class="src">${svg('rundgang')}Rundgang</span>`;
@@ -84,11 +124,12 @@ function source(t) {
 function renderTop() {
   const s = state;
   $('#sub').textContent = s.logged_in ? `Nächster Lauf ${s.next_run}` : 'Claude ist nicht angemeldet';
+  const queued = s.tickets.filter((t) => t.state === 'entwerfen' || t.state === 'umsetzen').length;
   $('#topactions').innerHTML = s.busy
-    ? '<button id="cancel" class="danger">Abbrechen</button>'
-    : `<button id="runnow" class="primary" title="Alles, was ansteht, jetzt bearbeiten">${svg('bolt').replace('<svg', '<svg style="width:16px;height:16px;fill:currentColor;vertical-align:-3px"')} <span class="runlabel">Jetzt ausführen</span></button>`;
-  if ($('#runnow')) $('#runnow').onclick = async () => { try { await api('api/run', {}); await load(); } catch (e) { alert(e.message); } };
-  if ($('#cancel')) $('#cancel').onclick = async () => { if (confirm('Den laufenden Claude-Aufruf abbrechen?')) { await api('api/cancel', {}); await load(); } };
+    ? `<button id="cancel" class="danger" title="Den laufenden Claude-Aufruf für #${s.current ? s.current.id : ''} abbrechen">Lauf abbrechen</button>`
+    : `<button id="runnow" class="primary" ${queued ? '' : 'disabled'} title="${queued ? `${queued} Ticket(s) in der Schlange jetzt bearbeiten` : 'Nichts in der Schlange'}">${svg('bolt').replace('<svg', '<svg style="width:16px;height:16px;fill:currentColor;vertical-align:-3px"')} <span class="runlabel">Jetzt ausführen${queued ? ` (${queued})` : ''}</span></button>`;
+  if ($('#runnow')) $('#runnow').onclick = (e) => act(e.currentTarget, async () => { await api('api/run', {}); await load(); }, 'Lauf gestartet');
+  if ($('#cancel')) $('#cancel').onclick = (e) => { if (confirm(`Den laufenden Claude-Aufruf für #${s.current ? s.current.id : ''} abbrechen? Das Ticket geht auf „Fehler“ und kann erneut versucht werden.`)) act(e.currentTarget, async () => { await api('api/cancel', {}); await load(); }, 'Abgebrochen'); };
 }
 
 function renderLive() {
@@ -128,10 +169,11 @@ function renderList() {
       <div class="row">${chip(t)}${t.direct && ['umsetzen', 'in_arbeit'].includes(t.state) ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">${ago(t.updated)}</span></div>
       ${t.summary ? `<div class="sum">${esc(t.summary)}</div>` : ''}</div>`).join('');
     const head = `<div class="ghead">${g.title}<span class="count">${items.length}</span></div>`;
-    return g.closed ? `<details class="group"><summary>${head}</summary>${cards}</details>` : `<div class="group">${head}${cards}</div>`;
+    return g.closed ? `<details class="group" data-k="list-${g.title}"><summary>${head}</summary>${cards}</details>` : `<div class="group">${head}${cards}</div>`;
   }).join('');
   $('#list').innerHTML = html || `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Alles erledigt.</strong></div><div class="hint">Neue Wünsche auf die To-do-Liste „Hausmeister“ schreiben oder hier anlegen.</div></div>`;
   document.querySelectorAll('.card').forEach((c) => { c.onclick = () => openTicket(Number(c.dataset.id)); });
+  restoreDetails($('#list'));
 }
 
 // Progress of a ticket: collected, draft, approval, implementation, acceptance.
@@ -161,20 +203,21 @@ function resultItem(r) {
     ${r.details ? `<div class="md">${md(r.details)}</div>` : ''}
     ${r.test ? `<h3>So prüfst du es</h3><div class="md">${md(r.test)}</div>` : ''}
     ${files.length ? `<div class="files">${files.map((f) => `<code>${esc(f)}</code>`).join('')}</div>` : ''}
-    ${r.changed_by_itself && r.changed_by_itself.length ? `<details><summary>Von Integrationen nebenbei geändert, wird nicht zurückgerollt (${r.changed_by_itself.length})</summary><div class="files">${r.changed_by_itself.map((f) => `<code>${esc(f)}</code>`).join('')}</div></details>` : ''}
+    ${r.changed_by_itself && r.changed_by_itself.length ? `<details data-k="noise-${esc(r.at)}"><summary>Von Integrationen nebenbei geändert, wird nicht zurückgerollt (${r.changed_by_itself.length})</summary><div class="files">${r.changed_by_itself.map((f) => `<code>${esc(f)}</code>`).join('')}</div></details>` : ''}
     ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
     ${r.suggestions ? `<p>${r.suggestions.length} neue Vorschläge, siehe Reiter „Vorschläge“.</p>` : ''}
     ${r.message ? `<p class="meta">Meldung: ${esc(r.message)}</p>` : ''}
     ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}
-    ${r.steps && r.steps.length ? `<details><summary>Was Claude getan hat (${r.steps.length} Schritte)</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
+    ${r.steps && r.steps.length ? `<details data-k="steps-${esc(r.at)}"><summary>Was Claude getan hat (${r.steps.length} Schritte)</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
   </div></div>`;
 }
 
 const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
 
-async function openTicket(id) {
+async function openTicket(id, fromHistory) {
+  if (!fromHistory && openId !== id) { try { history.pushState({ ticket: id }, ''); } catch { /* sandboxed */ } }
   openId = id;
   const t = await api(`api/tickets/${id}`);
   const last = t.results[t.results.length - 1];
@@ -186,19 +229,19 @@ async function openTicket(id) {
       <h2><span class="meta">#${t.id}</span> ${esc(t.title)}</h2>
       <div class="row">${chip(t)}${t.direct ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">angelegt ${ago(t.created)}</span></div>
       ${t.text ? `<div class="desc md">${md(t.text)}</div>` : ''}
-      ${stepper(t)}
+      ${t.kind === 'rundgang' ? '' : stepper(t)}
     </div>
     ${t.state === 'rueckfrage' && last && last.question ? `<div class="box ask"><strong>Claude fragt:</strong> ${esc(last.question)}<div class="meta">Antwort unten eintragen und „Antwort senden“ drücken.</div></div>` : ''}
     ${running ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet gerade</b><span>${esc(state.current.step || '')}</span></div></div><ol class="steps">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol>` : ''}
     ${t.actions.length || t.can_rollback || !running ? `<div class="box composer">
       <textarea id="comment" rows="2" placeholder="${needs ? 'Antwort oder was anders sein soll' : 'Kommentar (optional)'}"></textarea>
-      <div class="row"><div class="actionbar">${t.actions.map((a) => `<button data-a="${a.key}" class="${primary(a.key) ? 'primary' : a.key === 'sofort' ? 'soft' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
+      <div class="row"><div class="actionbar"> ${t.actions.map((a) => `<button data-a="${a.key}" ${a.comment ? 'data-needs="1"' : ''} class="${primary(a.key) ? 'primary' : a.key === 'sofort' ? 'soft' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
         ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
-        <button id="addcomment">Nur kommentieren</button></div>
+        ${t.state === 'rueckfrage' ? '' : '<button id="addcomment">Nur kommentieren</button>'}</div>
     </div>` : ''}
     ${t.comments.length ? `<div class="sec">Kommentare</div>${t.comments.map((c) => `<div class="comment"><div class="avatar">${esc(initials(c.by))}</div><div class="bubble"><div class="meta">${esc(c.by)} · ${ago(c.at)}</div>${esc(c.text)}</div></div>`).join('')}` : ''}
     ${t.results.length ? `<div class="sec">Verlauf der Arbeit</div><div class="timeline">${[...t.results].reverse().map(resultItem).join('')}</div>` : ''}
-    <details><summary>Alle Zustandswechsel</summary><table>${t.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(h.by)}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
+    <details data-k="history"><summary>Alle Zustandswechsel</summary><table>${t.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(h.by)}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
   $('#list').hidden = true;
   $('#stats').hidden = true;
   $('#detail').hidden = false;
@@ -208,22 +251,42 @@ async function openTicket(id) {
   document.querySelectorAll('#detail [data-a]').forEach((b) => {
     b.onclick = async () => {
       const a = b.dataset.a;
+      if (b.disabled) return;
       if (a === 'sofort' && !confirm(t.state === 'entwurf' || t.state === 'umsetzen'
         ? 'Claude setzt den Entwurf jetzt sofort um. Vorher wird gesichert. Los?'
         : 'Claude plant und setzt jetzt sofort um, ohne dass du vorher einen Entwurf siehst. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
       if (a === 'umsetzen' && !confirm('Claude setzt den Entwurf beim nächsten Lauf um. Vorher wird gesichert. Freigeben?')) return;
       if (a === 'verwerfen' && !confirm('Ticket verwerfen?')) return;
-      try { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment') ? $('#comment').value : '' }); await load(); await openTicket(id); } catch (e) { alert(e.message); }
+      const done = { umsetzen: 'Freigegeben, wird beim nächsten Lauf umgesetzt', sofort: 'Claude legt jetzt los', entwerfen: 'Neuer Entwurf beim nächsten Lauf', antworten: 'Antwort gesendet', nachbessern: 'Nachbesserung angefordert', abnehmen: 'Abgenommen', verwerfen: 'Verworfen', wiederholen: 'Wird erneut versucht', zurueckstellen: 'Zurück auf Neu' };
+      await act(b, async () => { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment') ? $('#comment').value : '' }); delete drafts[id]; await load(); await openTicket(id); }, done[a]);
     };
   });
-  if ($('#addcomment')) $('#addcomment').onclick = async () => { try { await api(`api/tickets/${id}/comment`, { text: $('#comment').value }); await openTicket(id); } catch (e) { alert(e.message); } };
+  const ta = $('#comment');
+  const sync = () => {
+    const has = !!(ta && ta.value.trim());
+    document.querySelectorAll('#detail [data-a]').forEach((b) => { if (b.dataset.needs) { b.disabled = !has; b.title = has ? '' : 'Erst oben eine Antwort oder einen Wunsch eintragen'; } });
+    if ($('#addcomment')) $('#addcomment').disabled = !has;
+  };
+  if (ta) {
+    ta.value = drafts[id] || '';
+    ta.oninput = () => { drafts[id] = ta.value; sync(); };
+    sync();
+  }
+  if ($('#addcomment')) $('#addcomment').onclick = (e) => act(e.currentTarget, async () => { await api(`api/tickets/${id}/comment`, { text: ta.value }); delete drafts[id]; await openTicket(id); }, 'Kommentar gespeichert');
+  restoreDetails($('#detail'));
   if ($('#rollback')) {
     $('#rollback').onclick = async () => {
       if (!confirm('Die Dateien, die diese Umsetzung geändert hat, auf den Stand davor zurücksetzen? Dafür wird Home Assistant neu gestartet (bei Dashboards und Helfern kurz gestoppt).')) return;
-      try { await api(`api/tickets/${id}/rollback`, {}); await load(); await openTicket(id); } catch (e) { alert(e.message); }
+      await act($('#rollback'), async () => { await api(`api/tickets/${id}/rollback`, {}); await load(); await openTicket(id); }, 'Zurückgerollt');
     };
   }
 }
+
+// Back button of the browser or the HA app closes the ticket instead of the panel.
+window.addEventListener('popstate', (e) => {
+  if (e.state && e.state.ticket) openTicket(e.state.ticket, true).catch(() => {});
+  else if (openId) closeTicket();
+});
 
 function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; $('#stats').hidden = false; if (state) renderLive(); }
 
@@ -243,7 +306,7 @@ function renderSuggestions() {
   if ($('#inspect')) {
     $('#inspect').onclick = async () => {
       if (!confirm('Der Hausmeister schaut sich jetzt die ganze Installation an (nur lesend). Das braucht einige Minuten und etwas Kontingent. Los?')) return;
-      try { await api('api/inspect', {}); await load(); } catch (e) { alert(e.message); }
+      await act($('#inspect'), async () => { await api('api/inspect', {}); await load(); }, 'Der Hausmeister schaut sich um');
     };
   }
   const card = (x, decided) => {
@@ -266,19 +329,21 @@ function renderSuggestions() {
   };
   $('#suggestions').innerHTML = (open.length ? open.map((x) => card(x, false)).join('')
     : `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Keine offenen Vorschläge.</strong></div><div class="hint">„Jetzt umschauen“ starten oder im Rundgang regelmäßig suchen lassen (Einstellung inspection_day).</div></div>`)
-    + (done.length ? `<details class="group"><summary><div class="ghead">Entschieden<span class="count">${done.length}</span></div></summary>${done.map((x) => card(x, true)).join('')}</details>` : '');
+    + (done.length ? `<details class="group" data-k="sug-done"><summary><div class="ghead">Entschieden<span class="count">${done.length}</span></div></summary>${done.map((x) => card(x, true)).join('')}</details>` : '');
   document.querySelectorAll('#suggestions [data-sug]').forEach((b) => {
     b.onclick = async () => {
       const id = b.closest('.sug').dataset.id;
       const a = b.dataset.sug;
       if (a === 'sofort' && !confirm('Claude plant und setzt diesen Vorschlag jetzt um, ohne Entwurf zur Freigabe. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
-      try {
+      const msg = { entwurf: 'Als Ticket übernommen', sofort: 'Claude legt jetzt los', sammeln: 'Gemerkt, steht unter Tickets', ablehnen: 'Wird nicht wieder vorgeschlagen', wieder: 'Wieder offen', erledigt: 'Als erledigt vermerkt' };
+      await act(b, async () => {
         const r = await api(`api/suggestions/${id}`, { action: a });
         await load();
         if (r.ticket && a !== 'sammeln') { showTab('tickets'); await openTicket(r.ticket); }
-      } catch (e) { alert(e.message); }
+      }, msg[a]);
     };
   });
+  restoreDetails($('#suggestions'));
   document.querySelectorAll('#suggestions [data-open]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); showTab('tickets'); openTicket(Number(a.dataset.open)); }; });
 }
 
@@ -304,8 +369,15 @@ function renderLogin() {
   if (!$('#term').src) $('#term').src = 'terminal/';
 }
 
+let offline = false;
 async function load() {
-  state = await api('api/state');
+  try {
+    state = await api('api/state');
+    if (offline) { offline = false; toast('Wieder verbunden', 'ok'); }
+  } catch (e) {
+    if (!offline) { offline = true; toast(`Keine Verbindung zum Hausmeister: ${e.message}`, 'bad'); }
+    throw e;
+  }
   renderTop();
   renderLive();
   renderStats();
@@ -335,7 +407,7 @@ $('#newform').onsubmit = async (e) => {
     await load();
     showTab('tickets');
     await openTicket(t.id);
-  } catch (err) { alert(err.message); }
+  } catch (err) { toast(err.message, 'bad'); }
 };
 
 load().catch((e) => { $('#list').textContent = e.message; });

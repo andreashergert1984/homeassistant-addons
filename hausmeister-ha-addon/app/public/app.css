@@ -206,3 +206,16 @@ th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
 .done-sug { opacity: .75; }
 button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
 button.ghost:hover { background: var(--soft); color: var(--fg); }
+
+/* toasts and busy buttons */
+#toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 20; width: min(440px, calc(100% - 32px)); }
+.toast { background: #263238; color: #fff; border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow-up); font-size: 14px; transition: opacity .3s, transform .3s; }
+.toast.ok { background: #2e7d32; }
+.toast.bad { background: #c62828; }
+.toast.out { opacity: 0; transform: translateY(8px); }
+button.busy { position: relative; color: transparent !important; }
+button.busy::after { content: ""; position: absolute; inset: 0; margin: auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-color: var(--muted) transparent var(--muted) transparent; animation: spin .8s linear infinite; }
+button.primary.busy::after { border-color: #fff transparent #fff transparent; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps li { overflow-wrap: anywhere; }
+@media (max-width: 640px) { #toasts { bottom: 90px; } }

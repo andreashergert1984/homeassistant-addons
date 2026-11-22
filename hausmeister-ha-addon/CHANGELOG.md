@@ -1,3 +1,13 @@
+## 0.6.0
+
+- Aufgeklappte Bereiche (Abgeschlossen, Schritte, Verlauf, Entschieden) bleiben beim automatischen Aktualisieren offen.
+- Angefangene Kommentare gehen beim Aktualisieren nicht mehr verloren.
+- „Antwort senden“ und „Nachbessern“ sind gesperrt, bis etwas im Feld steht; bei einer Rückfrage gibt es kein „Nur kommentieren“ mehr, das die Rückfrage offen lassen würde.
+- Rückmeldungen als kurze Einblendung statt Fehlerfenster; Knöpfe zeigen, dass sie arbeiten, und lassen sich nicht doppelt drücken.
+- „Jetzt ausführen“ zeigt, wie viele Tickets warten, und ist ohne Schlange gesperrt; „Lauf abbrechen“ nennt das Ticket.
+- Die Zurück-Taste im Browser und in der HA-App schließt das Ticket statt das Panel.
+- Hinweis bei Verbindungsverlust; Rundgang-Tickets ohne Fortschrittsleiste; lange Befehle brechen um.
+
 ## 0.5.3
 
 - Im geöffneten Ticket, an dem Claude gerade arbeitet, entfällt der obere Streifen mit „Ansehen“; die Schritte stehen im Ticket.
