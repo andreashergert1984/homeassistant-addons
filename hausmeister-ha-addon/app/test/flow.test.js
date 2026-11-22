@@ -46,7 +46,7 @@ const draft = a[a.indexOf('--permission-mode') + 1] === 'default';
 if (!draft) fs.appendFileSync(${JSON.stringify(path.join(cfg, 'configuration.yaml'))}, 'automation: !include automations.yaml\\n');
 const rundgang = a[a.indexOf('-p') + 1].startsWith('Aufgabe: RUNDGANG');
 const out = rundgang
-  ? { status: 'entwurf', zusammenfassung: 'Zwei Dinge gefunden.', details: 'Befunde', vorschlaege: [{ titel: 'Batterie Flursensor', text: 'leer' }, { titel: 'Reparatur offen', text: 'x' }] }
+  ? { status: 'entwurf', zusammenfassung: 'Zwei Dinge gefunden.', details: 'Befunde', vorschlaege: [{ titel: 'Batterie Flursensor tauschen', text: 'leer', begruendung: 'sensor.flur_batterie 4 %', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein', handarbeit: true }, { titel: 'Reparatur offen', text: 'x', kategorie: 'unsinn', nutzen: 'mittel', aufwand: 'mittel' }, { titel: 'Batterie  Flursensor TAUSCHEN!', text: 'doppelt', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein' }] }
   : draft
     ? { status: 'entwurf', zusammenfassung: 'Ich würde eine Zeile ergänzen.', details: '- configuration.yaml: automation einbinden' }
     : { status: 'umgesetzt', zusammenfassung: 'Zeile ergänzt.', details: 'erledigt', geaenderte_dateien: ['configuration.yaml'] };
@@ -196,7 +196,7 @@ test('Kontingentgrenze lässt geplante Läufe aus, Sofort läuft trotzdem', asyn
   await post(`/api/tickets/${id}/action`, { action: 'verwerfen' });
 });
 
-test('Rundgang legt Vorschläge als neue Tickets an', async () => {
+test('Rundgang sammelt Vorschläge, du entscheidest einzeln', async () => {
   mod.opts.inspection_day = 'taeglich';
   const day = new Date();
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')} ${mod.opts.run_times[0]}`;
@@ -207,11 +207,36 @@ test('Rundgang legt Vorschläge als neue Tickets an', async () => {
   await mod.runner.cycle('Test');
   const t = await get(`/api/tickets/${rg[0].id}`);
   assert.strictEqual(t.state, 'erledigt');
-  const created = t.results[t.results.length - 1].created;
-  assert.strictEqual(created.length, 2);
-  assert.strictEqual((await get(`/api/tickets/${created[0]}`)).state, 'neu');
+  let st = await get('/api/state');
+  const open = st.suggestions.filter((x) => x.state === 'offen');
+  assert.strictEqual(open.length, 2, 'doppelter Titel nur einmal');
+  const bat = open.find((x) => x.title.startsWith('Batterie'));
+  assert.deepStrictEqual([bat.category, bat.benefit, bat.effort, bat.reason, bat.manual], ['wartung', 'hoch', 'klein', 'sensor.flur_batterie 4 %', true]);
+  assert.strictEqual(open.find((x) => x.title === 'Reparatur offen').category, 'wartung', 'unbekannte Kategorie wird Wartung');
   const args = fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n').map(JSON.parse).pop();
   assert.strictEqual(args[args.indexOf('--permission-mode') + 1], 'default', 'Rundgang nur lesend');
+
+  const take = await post(`/api/suggestions/${bat.id}`, { action: 'entwurf' });
+  assert.strictEqual(take.status, 200);
+  const nt = await get(`/api/tickets/${take.body.ticket}`);
+  assert.strictEqual(nt.state, 'entwerfen');
+  assert.match(nt.text, /sensor\.flur_batterie 4 %/, 'Begründung wandert ins Ticket');
+  assert.strictEqual((await post(`/api/suggestions/${bat.id}`, { action: 'entwurf' })).status, 400, 'nicht zweimal übernehmen');
+  const rep = open.find((x) => x.title === 'Reparatur offen');
+  assert.strictEqual((await post(`/api/suggestions/${rep.id}`, { action: 'ablehnen' })).body.state, 'abgelehnt');
+  assert.strictEqual((await post(`/api/suggestions/${rep.id}`, { action: 'quatsch' })).status, 400);
+
+  // A second inspection does not propose declined or taken titles again and tells Claude so.
+  const ins = await post('/api/inspect', {});
+  assert.strictEqual(ins.status, 200);
+  for (let i = 0; i < 200 && (await get(`/api/tickets/${ins.body.id}`)).state !== 'erledigt'; i++) await new Promise((r) => setTimeout(r, 25));
+  st = await get('/api/state');
+  assert.strictEqual(st.suggestions.length, 2, 'nichts doppelt');
+  const a2 = fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n').map(JSON.parse).pop();
+  assert.match(a2[a2.indexOf('-p') + 1], /Reparatur offen \(abgelehnt\)/);
+  assert.strictEqual((await post(`/api/suggestions/${rep.id}`, { action: 'wieder' })).body.state, 'offen');
+  assert.strictEqual((await post(`/api/suggestions/${rep.id}`, { action: 'erledigt' })).body.state, 'erledigt', 'Handarbeit selbst erledigt');
+  await post(`/api/tickets/${take.body.ticket}/action`, { action: 'verwerfen' });
 });
 
 test('Wächter zwischen den Läufen melden Schäden von außen', async () => {

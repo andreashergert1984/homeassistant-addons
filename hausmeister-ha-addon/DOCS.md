@@ -85,12 +85,16 @@ previous run, independent of tickets: YAML and dashboard files that shrank by mo
 disappeared, and ten or more vanished entities, raise a notification and a banner on the board.
 After an implementation, new errors in the Home Assistant log are listed in the report.
 
-## Inspection
+## Suggestions ("Was würde ich anpassen?")
 
-With `inspection_day` set (a weekday or `taeglich`), the first run of that day starts a read-only
-inspection: repairs, entities unavailable for more than a day, automations with errors, log
-warnings, the configuration check and weak batteries. Up to five proposals become new tickets
-in "Neu"; nothing is changed.
+The tab **Vorschläge** lists what the caretaker would change in your house: errors, security,
+energy, comfort, cleanup and maintenance, each with a reason taken from your installation, benefit
+and effort. Things a person has to do on site (a battery, a device) are marked "machst du selbst".
+For each suggestion: "Als Ticket" (draft), "Sofort umsetzen", "Nur merken" or "Nicht nötig".
+Declined and taken suggestions are not proposed again.
+
+Suggestions come from an inspection (read only): press "Jetzt umschauen", or set `inspection_day`
+(a weekday or `taeglich`) to run one with the first run of that day.
 
 ## Tickets from automations
 
@@ -133,4 +137,4 @@ The sensors are recreated by the add-on after a restart of Home Assistant (withi
 | `notify_service` | | e.g. `notify.mobile_app_phone`. |
 | `model` | | e.g. `sonnet`, empty uses the default. |
 | `max_quota_percent` | 80 | Scheduled runs pause above this subscription usage, 0 turns it off. |
-| `inspection_day` | aus | `aus`, `taeglich` or a weekday (`mo` … `so`). |
+| `inspection_day` | aus | Inspection for suggestions: `aus`, `taeglich` or a weekday (`mo` … `so`). |

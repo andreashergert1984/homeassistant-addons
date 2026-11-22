@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { STATES, slug } = require('./logic');
+const { STATES, slug, sameKey, KATEGORIEN } = require('./logic');
 
 class Store {
   constructor(file, docDir) {
@@ -64,6 +64,39 @@ class Store {
     t.updated = this.now();
     this.save();
     this.writeDoc(t);
+  }
+
+  // Suggestions from an inspection: "what would I change". Titles already open,
+  // taken over or declined are not added again.
+  knownSuggestions() {
+    return (this.data.suggestions || []).map((x) => `${x.title}${x.state === 'abgelehnt' ? ' (abgelehnt)' : ''}`);
+  }
+
+  addSuggestions(list, fromTicket) {
+    this.data.suggestions = this.data.suggestions || [];
+    this.data.next_suggestion = this.data.next_suggestion || 1;
+    const seen = new Set(this.data.suggestions.map((x) => sameKey(x.title)));
+    const added = [];
+    for (const p of list.slice(0, 10)) {
+      const title = String(p.titel || '').trim().slice(0, 200);
+      if (!title || seen.has(sameKey(title))) continue;
+      seen.add(sameKey(title));
+      const x = {
+        id: this.data.next_suggestion++, title, text: String(p.text || '').trim(), reason: String(p.begruendung || '').trim(),
+        category: KATEGORIEN[p.kategorie] ? p.kategorie : 'wartung', benefit: ['hoch', 'mittel', 'gering'].includes(p.nutzen) ? p.nutzen : 'mittel',
+        effort: ['klein', 'mittel', 'gross'].includes(p.aufwand) ? p.aufwand : 'mittel', manual: p.handarbeit === true, state: 'offen', created: this.now(), from: fromTicket, ticket: null,
+      };
+      this.data.suggestions.push(x);
+      added.push(x);
+    }
+    this.save();
+    return added;
+  }
+
+  suggestion(id) {
+    const x = (this.data.suggestions || []).find((s) => s.id === Number(id));
+    if (!x) throw new Error(`Vorschlag ${id} gibt es nicht`);
+    return x;
   }
 
   addRun(run) {

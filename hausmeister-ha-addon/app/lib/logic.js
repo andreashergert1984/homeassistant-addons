@@ -227,7 +227,23 @@ const RESULT_SCHEMA = {
     geaenderte_dateien: { type: 'array', items: { type: 'string' } },
     ha_aenderungen: { type: 'array', items: { type: 'string' }, description: 'Über die API geänderte Dinge, z. B. Dashboard xyz, Automation abc' },
     test: { type: 'string', description: 'Wie man das Ergebnis selbst prüft' },
-    vorschlaege: { type: 'array', description: 'Nur beim Rundgang: vorgeschlagene Tickets', items: { type: 'object', properties: { titel: { type: 'string' }, text: { type: 'string' } }, required: ['titel', 'text'] } },
+    vorschlaege: {
+      type: 'array',
+      description: 'Nur beim Rundgang: was du anpassen würdest',
+      items: {
+        type: 'object',
+        properties: {
+          titel: { type: 'string', description: 'kurz, als Auftrag formuliert' },
+          text: { type: 'string', description: 'Befund und Ziel, so konkret, dass daraus ein Ticket werden kann' },
+          begruendung: { type: 'string', description: 'warum es sich lohnt, mit Beleg (Entität, Wert, Logzeile)' },
+          kategorie: { type: 'string', enum: ['fehler', 'sicherheit', 'energie', 'komfort', 'aufraeumen', 'wartung'] },
+          nutzen: { type: 'string', enum: ['hoch', 'mittel', 'gering'] },
+          aufwand: { type: 'string', enum: ['klein', 'mittel', 'gross'] },
+          handarbeit: { type: 'boolean', description: 'true, wenn ein Mensch es vor Ort tun muss (Batterie, Gerät, Kabel); Claude kann es nicht umsetzen' },
+        },
+        required: ['titel', 'text', 'kategorie', 'nutzen', 'aufwand'],
+      },
+    },
   },
   required: ['status', 'zusammenfassung', 'details'],
 };
@@ -238,9 +254,16 @@ function parseIntake(summary) {
   return m ? { title: m[1].trim() || String(summary).trim(), immediate: true } : { title: String(summary || '').trim(), immediate: false };
 }
 
+// Normalized title for "already proposed or declined".
+function sameKey(s) {
+  return String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+const KATEGORIEN = { fehler: 'Fehler', sicherheit: 'Sicherheit', energie: 'Energie', komfort: 'Komfort', aufraeumen: 'Aufräumen', wartung: 'Wartung' };
+
 function slug(s) {
   return String(s).toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'ticket';
 }
 
-module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };
+module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, sameKey, KATEGORIEN, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };

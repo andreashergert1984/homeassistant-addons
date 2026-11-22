@@ -18,6 +18,7 @@
   <div class="topactions" id="topactions"></div>
   <nav>
     <button data-tab="tickets" class="active">Tickets</button>
+    <button data-tab="vorschlaege">Vorschläge <span class="navcount" id="sugcount" hidden></span></button>
     <button data-tab="neu">Neues Ticket</button>
     <button data-tab="laeufe">Läufe</button>
     <button data-tab="sicherungen">Sicherungen</button>
@@ -30,6 +31,16 @@
     <div id="stats" class="stats"></div>
     <div id="list"></div>
     <div id="detail" hidden></div>
+  </section>
+  <section id="tab-vorschlaege" hidden>
+    <div class="panel sughead">
+      <div>
+        <h2>Was würde ich anpassen?</h2>
+        <p class="hint">Der Hausmeister schaut sich die Installation an (nur lesend) und schlägt vor, was sich lohnt: Fehler, Sicherheit, Energie, Komfort, Aufräumen. Du entscheidest pro Vorschlag. Abgelehnte schlägt er nicht wieder vor.</p>
+      </div>
+      <div id="inspectbox"></div>
+    </div>
+    <div id="suggestions"></div>
   </section>
   <section id="tab-neu" hidden>
     <form id="newform" class="panel">

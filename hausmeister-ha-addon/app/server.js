@@ -51,6 +51,7 @@ async function publish() {
     friendly_name: 'Hausmeister offene Tickets', icon: 'mdi:clipboard-list', unit_of_measurement: 'Tickets',
     in_arbeit: runner.current ? `#${runner.current.id}` : null, naechster_lauf: L.nextRun(opts.run_times, new Date()),
     letzter_lauf: last ? last.at : null, letzter_lauf_ergebnis: last ? (last.note || `${last.tickets.length} Ticket(s)`) : null,
+    vorschlaege_offen: (store.data.suggestions || []).filter((x) => x.state === 'offen').length,
     angemeldet: runner.loggedIn(), schritt: runner.current ? runner.current.step : null,
     kontingent_prozent: store.data.quota && store.data.quota.utilization != null ? Math.round(store.data.quota.utilization * 100) : null,
     kontingent_fenster: store.data.quota ? store.data.quota.window : null,
@@ -201,6 +202,8 @@ async function route(req, res) {
       return send(res, 200, {
         tickets: store.data.tickets.map((t) => view(t, false)).sort((a, b) => b.updated.localeCompare(a.updated)),
         runs: store.data.runs.slice(0, 30), busy: runner.busy, current: runner.current && { ...runner.current, steps: runner.current.steps.slice(-15) }, logged_in: runner.loggedIn(),
+        suggestions: (store.data.suggestions || []).slice().reverse(), kategorien: L.KATEGORIEN,
+        inspecting: store.data.tickets.some((t) => t.kind === 'rundgang' && ['entwerfen', 'in_arbeit'].includes(t.state)),
         quota: store.data.quota || null, max_quota_percent: opts.max_quota_percent, quota_blocked: runner.quotaBlocked(), watchdog: store.data.watchdog || null,
         next_run: L.nextRun(opts.run_times, new Date()), options: { run_times: opts.run_times, auto_draft: opts.auto_draft, intake_todo: opts.intake_todo },
         states: L.STATES,
@@ -249,6 +252,37 @@ async function route(req, res) {
       if (runner.busy) throw new Error('Es läuft schon ein Lauf');
       runner.cycle('von Hand', who(req)).then(() => publish()).catch((e) => console.error(e));
       return send(res, 200, { started: true });
+    }
+    if (req.method === 'POST' && p === '/api/inspect') {
+      if (store.data.tickets.some((t) => t.kind === 'rundgang' && ['entwerfen', 'in_arbeit'].includes(t.state))) throw new Error('Der Hausmeister schaut sich schon um');
+      const t = store.create({ title: `Umschauen am ${new Date().toLocaleDateString('de-DE')}`, text: 'Was würde ich anpassen? Nur lesen, Vorschläge sammeln.', by: who(req), source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
+      runner.kick([t.id], who(req));
+      publish().catch(() => {});
+      return send(res, 200, { started: true, id: t.id });
+    }
+    m = /^\/api\/suggestions\/(\d+)$/.exec(p);
+    if (req.method === 'POST' && m) {
+      const x = store.suggestion(m[1]);
+      const b = await readBody(req);
+      if (b.action === 'ablehnen' || b.action === 'wieder' || b.action === 'erledigt') {
+        if (b.action !== 'wieder' && x.state !== 'offen') throw new Error('Der Vorschlag ist schon entschieden');
+        if (b.action === 'wieder' && !['abgelehnt', 'erledigt'].includes(x.state)) throw new Error('Nur abgelehnte oder erledigte Vorschläge lassen sich zurückholen');
+        x.state = b.action === 'wieder' ? 'offen' : b.action === 'ablehnen' ? 'abgelehnt' : 'erledigt';
+        x.decided = store.now();
+        x.decided_by = who(req);
+        store.save();
+        return send(res, 200, x);
+      }
+      if (!['entwurf', 'sofort', 'sammeln'].includes(b.action)) throw new Error(`Unbekannte Aktion ${b.action}`);
+      if (x.state !== 'offen') throw new Error('Der Vorschlag ist schon entschieden');
+      const text = [x.text, x.reason ? `Begründung aus dem Rundgang: ${x.reason}` : ''].filter(Boolean).join('\n\n');
+      const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[b.action];
+      const t = store.create({ title: x.title, text, by: who(req), source: 'rundgang', state, direct: b.action === 'sofort' });
+      Object.assign(x, { state: 'uebernommen', ticket: t.id, decided: store.now(), decided_by: who(req) });
+      store.save();
+      if (b.action === 'sofort') runner.kick([t.id], who(req));
+      publish().catch(() => {});
+      return send(res, 200, { suggestion: x, ticket: t.id });
     }
     if (req.method === 'POST' && p === '/api/cancel') return send(res, 200, { cancelled: runner.cancel() });
     if (req.method === 'GET' && p === '/api/backups') return send(res, 200, await git.log(50));

@@ -25,7 +25,7 @@ configuration:
     description: Ab dieser Auslastung des Abos (höchstes Fenster laut Claude Code) fallen geplante Läufe aus, bis das Fenster erneuert ist. Sofort-Tickets laufen trotzdem. 0 schaltet die Grenze aus.
   inspection_day:
     name: Rundgang
-    description: An diesem Tag sucht Claude beim ersten Lauf nur lesend nach Problemen und legt bis zu fünf Vorschläge als neue Tickets an. aus, taeglich oder ein Wochentag.
+    description: An diesem Tag schaut sich Claude beim ersten Lauf nur lesend um und füllt den Reiter Vorschläge. aus, taeglich oder ein Wochentag.
   model:
     name: Modell
     description: Optional, z. B. sonnet oder opus. Leer bedeutet die Vorgabe von Claude Code.

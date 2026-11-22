@@ -22,6 +22,12 @@ const ICON = {
   rundgang: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14',
   bolt: 'M11 15H6l7-14v8h5l-7 14z',
   check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  fehler: 'M13 13h-2V7h2m0 10h-2v-2h2M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2',
+  sicherheit: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11z',
+  energie: 'M11 15H6l7-14v8h5l-7 14z',
+  komfort: 'M12 3 2 12h3v8h6v-6h2v6h6v-8h3z',
+  aufraeumen: 'M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6z',
+  wartung: 'M22.7 19 13.6 9.9c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4',
 };
 const SOURCE = { todo: ['todo', 'To-do-Liste'], board: ['board', 'Board'], event: ['event', 'Automation'], rundgang: ['rundgang', 'Rundgang'] };
 const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[k]}"/></svg>`;
@@ -156,6 +162,7 @@ function resultItem(r) {
     ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
     ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
+    ${r.suggestions ? `<p>${r.suggestions.length} neue Vorschläge, siehe Reiter „Vorschläge“.</p>` : ''}
     ${r.message ? `<p class="meta">Meldung: ${esc(r.message)}</p>` : ''}
     ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}
     ${r.steps && r.steps.length ? `<details><summary>Was Claude getan hat (${r.steps.length} Schritte)</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
@@ -216,6 +223,61 @@ async function openTicket(id) {
 
 function closeTicket() { openId = null; $('#detail').hidden = true; $('#list').hidden = false; $('#stats').hidden = false; }
 
+const BENEFIT = { hoch: 0, mittel: 1, gering: 2 };
+const EFFORT = { klein: 0, mittel: 1, gross: 2 };
+
+function renderSuggestions() {
+  const all = state.suggestions || [];
+  const open = all.filter((x) => x.state === 'offen').sort((a, b) => (BENEFIT[a.benefit] - BENEFIT[b.benefit]) || (EFFORT[a.effort] - EFFORT[b.effort]));
+  const done = all.filter((x) => x.state !== 'offen');
+  const c = $('#sugcount');
+  c.hidden = !open.length;
+  c.textContent = open.length;
+  $('#inspectbox').innerHTML = state.inspecting
+    ? '<div class="live" style="margin:0"><span class="pulse"></span><div class="txt"><b>Schaut sich gerade um</b><span>Das dauert ein paar Minuten.</span></div></div>'
+    : `<button id="inspect" class="primary big">${svg('rundgang').replace('<svg', '<svg style="width:18px;height:18px;fill:currentColor;vertical-align:-4px"')} Jetzt umschauen</button>`;
+  if ($('#inspect')) {
+    $('#inspect').onclick = async () => {
+      if (!confirm('Der Hausmeister schaut sich jetzt die ganze Installation an (nur lesend). Das braucht einige Minuten und etwas Kontingent. Los?')) return;
+      try { await api('api/inspect', {}); await load(); } catch (e) { alert(e.message); }
+    };
+  }
+  const card = (x, decided) => {
+    const cat = state.kategorien[x.category] || x.category;
+    const tone = x.benefit === 'hoch' ? 'ok' : '';
+    const after = x.state === 'uebernommen' ? `<span class="chip ok">${svg('check')}als Ticket <a href="#" data-open="${x.ticket}">#${x.ticket}</a></span>`
+      : x.state === 'abgelehnt' ? '<span class="chip">nicht nötig</span> <button class="ghost" data-sug="wieder">Zurückholen</button>'
+        : x.state === 'erledigt' ? `<span class="chip ok">${svg('check')}selbst erledigt</span> <button class="ghost" data-sug="wieder">Zurückholen</button>` : '';
+    const buttons = x.manual
+      ? '<button class="primary" data-sug="erledigt">Erledigt</button><button class="ghost" data-sug="sammeln">Als Ticket merken</button><button class="ghost" data-sug="ablehnen">Nicht nötig</button>'
+      : '<button class="primary" data-sug="entwurf">Als Ticket</button><button class="soft" data-sug="sofort">Sofort umsetzen</button><button class="ghost" data-sug="sammeln">Nur merken</button><button class="ghost" data-sug="ablehnen">Nicht nötig</button>';
+    return `<div class="sug cat-${esc(x.category)} ${decided ? 'done-sug' : ''}" data-id="${x.id}">
+      <div class="ic">${svg(ICON[x.category] ? x.category : 'wartung')}</div>
+      <div class="body"><div class="t">${esc(x.title)}</div>
+      <div class="row"><span class="chip">${esc(cat)}</span><span class="chip ${tone}">Nutzen ${esc(x.benefit)}</span><span class="chip">Aufwand ${esc(x.effort)}</span>${x.manual ? '<span class="chip warn">machst du selbst</span>' : ''}<span class="meta">${ago(x.created)}</span></div>
+      ${x.text ? `<div class="md">${md(x.text)}</div>` : ''}
+      ${x.reason ? `<div class="why"><strong>Warum:</strong> ${esc(x.reason)}</div>` : ''}
+      <div class="actionbar">${decided ? after : buttons}</div>
+    </div></div>`;
+  };
+  $('#suggestions').innerHTML = (open.length ? open.map((x) => card(x, false)).join('')
+    : `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Keine offenen Vorschläge.</strong></div><div class="hint">„Jetzt umschauen“ starten oder im Rundgang regelmäßig suchen lassen (Einstellung inspection_day).</div></div>`)
+    + (done.length ? `<details class="group"><summary><div class="ghead">Entschieden<span class="count">${done.length}</span></div></summary>${done.map((x) => card(x, true)).join('')}</details>` : '');
+  document.querySelectorAll('#suggestions [data-sug]').forEach((b) => {
+    b.onclick = async () => {
+      const id = b.closest('.sug').dataset.id;
+      const a = b.dataset.sug;
+      if (a === 'sofort' && !confirm('Claude plant und setzt diesen Vorschlag jetzt um, ohne Entwurf zur Freigabe. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
+      try {
+        const r = await api(`api/suggestions/${id}`, { action: a });
+        await load();
+        if (r.ticket && a !== 'sammeln') { showTab('tickets'); await openTicket(r.ticket); }
+      } catch (e) { alert(e.message); }
+    };
+  });
+  document.querySelectorAll('#suggestions [data-open]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); showTab('tickets'); openTicket(Number(a.dataset.open)); }; });
+}
+
 function renderRuns() {
   const kind = { entwurf: 'Entwurf fertig', umgesetzt: 'umgesetzt', rueckfrage: 'Rückfrage', fehler: 'Fehler', kontingent: 'Kontingent erschöpft', anmeldung: 'Anmeldung fehlt' };
   $('#runs').innerHTML = `<h2>Läufe</h2>${state.runs.length ? `<table><tr><th>Wann</th><th>Anlass</th><th>Ergebnis</th></tr>${state.runs.map((r) => `<tr><td>${fmt(r.at)}</td><td>${esc(r.reason)}${r.by && r.by !== 'Zeitplan' ? `<br><span class="meta">${esc(r.by)}</span>` : ''}</td><td>${r.tickets.map((x) => `<a href="#" data-open="${x.id}">#${x.id}</a> ${esc(x.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf')}: ${esc(kind[x.kind] || x.kind)}`).join('<br>')}${r.note ? `<span class="meta">${esc(r.note)}</span>` : ''}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Läufe.</p>'}`;
@@ -245,6 +307,7 @@ async function load() {
   renderStats();
   renderList();
   renderRuns();
+  renderSuggestions();
 }
 
 function showTab(tab) {

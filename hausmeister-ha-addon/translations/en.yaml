@@ -25,7 +25,7 @@ configuration:
     description: Above this utilization of the subscription (highest window reported by Claude Code) scheduled runs are skipped until the window resets. Immediate tickets still run. 0 turns it off.
   inspection_day:
     name: Inspection
-    description: On this day the first run looks for problems (read only) and creates up to five proposals as new tickets. aus (off), taeglich (daily) or a weekday (mo, di, mi, do, fr, sa, so).
+    description: On this day the first run looks around (read only) and fills the Vorschläge (suggestions) tab. aus (off), taeglich (daily) or a weekday (mo, di, mi, do, fr, sa, so).
   model:
     name: Model
     description: Optional, e.g. sonnet or opus. Empty uses the Claude Code default.

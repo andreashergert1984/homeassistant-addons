@@ -181,3 +181,28 @@ th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
   .stepper .st .l { display: none; }
   .stepnow { display: block; }
 }
+
+/* suggestions */
+.navcount { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--warn-line); color: #fff; font-size: 11px; font-weight: 700; vertical-align: 1px; }
+.sughead { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.sughead p { margin: 0; }
+.sughead button { white-space: nowrap; }
+@media (max-width: 640px) { .sughead { flex-direction: column; align-items: stretch; } }
+.sug { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 10px; display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
+.sug .body { display: grid; gap: 6px; min-width: 0; }
+.sug .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
+.sug .ic svg { width: 22px; height: 22px; fill: currentColor; }
+.sug .t { font-weight: 600; }
+.sug .why { color: var(--muted); font-size: 13.5px; }
+.sug .row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.sug .actionbar { margin-top: 6px; }
+.cat-fehler .ic { background: var(--bad-bg); color: var(--bad); }
+.cat-sicherheit .ic { background: #fde7ef; color: #c2185b; }
+.cat-energie .ic { background: var(--ok-bg); color: var(--ok); }
+.cat-komfort .ic { background: var(--accent-soft); color: var(--accent-2); }
+.cat-aufraeumen .ic { background: #efe9fb; color: #6a3fb5; }
+.cat-wartung .ic { background: var(--warn-bg); color: var(--warn); }
+@media (prefers-color-scheme: dark) { .cat-sicherheit .ic { background: #3a1a28; color: #f48fb1; } .cat-aufraeumen .ic { background: #2a2140; color: #b39ddb; } }
+.done-sug { opacity: .75; }
+button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+button.ghost:hover { background: var(--soft); color: var(--fg); }

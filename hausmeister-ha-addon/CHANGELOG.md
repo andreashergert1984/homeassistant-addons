@@ -1,3 +1,9 @@
+## 0.5.0
+
+- Neuer Reiter „Vorschläge“: Was würde ich anpassen? Fehler, Sicherheit, Energie, Komfort, Aufräumen, Wartung, je mit Begründung, Nutzen und Aufwand. Übernehmen als Ticket, sofort umsetzen, merken oder ablehnen; Abgelehntes kommt nicht wieder. Handarbeit ist als „machst du selbst“ markiert.
+- „Jetzt umschauen“ startet einen Rundgang sofort; der regelmäßige Rundgang füllt die Vorschläge statt direkt Tickets anzulegen.
+- Eingabefelder in normaler Schrift.
+
 ## 0.4.0
 
 - Neues Design: Kennzahlen oben (wartet auf dich, in Arbeit, erledigt, Kontingent), Karten mit Farbstreifen, Herkunft und relativer Zeit, Live-Streifen während Claude arbeitet.

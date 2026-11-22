@@ -40,14 +40,18 @@ async function watchSnapshot() {
   return { states: await ha.states(), files: configFiles() };
 }
 
-const RUNDGANG = [
-  'Aufgabe: RUNDGANG. Du gehst nur lesend durch die Installation und suchst Dinge, die ein Hausmeister angehen sollte. Ändere nichts.',
-  'Prüfe insbesondere: offene Reparaturen (ha-read ws repairs/list_issues), Entitäten, die seit über 24 Stunden nicht verfügbar sind, Automationen und Skripte mit Fehlern in den letzten Ausführungen (ha-read ws trace/list), Warnungen und Fehler im Log (ha-read log 500), Konfigurationsprüfung (ha-read check), leere oder schwache Batterien von Geräten.',
-  'Fasse in details zusammen, was du gefunden hast, und schlage in vorschlaege höchstens fünf konkrete Tickets vor, die sich lohnen (titel kurz, text mit Befund und Ziel). Nichts vorschlagen, was in WISSEN.md als bewusst so vermerkt ist. Status entwurf.',
-].join('\n');
+function rundgangPrompt(skip) {
+  return [
+    'Aufgabe: RUNDGANG, Frage: Was würdest du an diesem Haus anpassen? Du gehst nur lesend durch die Installation. Ändere nichts.',
+    'Schau dir an: offene Reparaturen (ha-read ws repairs/list_issues), Entitäten, die seit über 24 Stunden nicht verfügbar sind, Automationen und Skripte mit Fehlern in den letzten Ausführungen (ha-read ws trace/list), Warnungen und Fehler im Log (ha-read log 500), die Konfigurationsprüfung (ha-read check), schwache Batterien, Sicherheitslücken (offene Türen und Fenster ohne Meldung, abgeschaltete Alarme), Energie (Verbraucher, die unnötig laufen, Lastverschiebung, PV-Überschuss), Komfort (wiederkehrende Handgriffe, die eine Automation übernehmen könnte), Aufräumen (verwaiste Entitäten, ungenutzte Automationen und Helfer, doppelte Dinge).',
+    'Liefere in vorschlaege höchstens zehn Vorschläge, die sich wirklich lohnen, je mit kategorie, nutzen, aufwand und einer begruendung mit Beleg aus der Installation. Was ein Mensch vor Ort tun muss (Batterie wechseln, Gerät prüfen), bekommt handarbeit true. Lieber wenige gute als viele. Nichts vorschlagen, was in WISSEN.md als bewusst so vermerkt ist.',
+    skip.length ? `Diese Vorschläge gibt es schon oder sie wurden abgelehnt, nicht noch einmal vorschlagen:\n${skip.map((x) => `- ${x}`).join('\n')}` : '',
+    'Fasse in details kurz zusammen, wie es um das Haus steht. Status entwurf.',
+  ].filter(Boolean).join('\n');
+}
 
-function promptFor(t, phase) {
-  if (t.kind === 'rundgang') return RUNDGANG;
+function promptFor(t, phase, store) {
+  if (t.kind === 'rundgang') return rundgangPrompt(store ? store.knownSuggestions() : []);
   const parts = [`Ticket #${t.id}: ${t.title}`, '', t.text || '(keine Beschreibung)', ''];
   if (t.comments.length) parts.push('Kommentare:', ...t.comments.map((c) => `- ${c.at} ${c.by}: ${c.text}`), '');
   const last = [...t.results].reverse().find((r) => r.phase === 'entwerfen' && r.kind === 'entwurf');
@@ -199,7 +203,7 @@ class Runner {
     const result = { at: new Date().toISOString(), phase };
     let before = null;
     try {
-      const args = ['-p', promptFor(t, phase), '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
+      const args = ['-p', promptFor(t, phase, s), '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
         '--add-dir', git.WORK, '--add-dir', SHARE];
       if (this.opts.model) args.push('--model', this.opts.model);
       if (t.session_id) args.push('--resume', t.session_id);
@@ -237,11 +241,11 @@ class Runner {
       if (r.out) Object.assign(result, { summary: r.out.zusammenfassung, details: r.out.details, question: r.out.frage, files: r.out.geaenderte_dateien || [], api: r.out.ha_aenderungen || [], test: r.out.test });
 
       if (t.kind === 'rundgang' && r.kind === 'entwurf') {
-        const proposals = (r.out.vorschlaege || []).slice(0, 5);
-        result.created = proposals.map((p) => s.create({ title: p.titel, text: p.text, by: 'Rundgang', source: 'rundgang', state: 'neu' }).id);
+        const added = s.addSuggestions(r.out.vorschlaege || [], t.id);
+        result.suggestions = added.map((x) => x.id);
         t.results.push(result);
-        s.move(t, 'erledigt', 'Hausmeister', `${result.created.length} Vorschläge als neue Tickets angelegt`);
-        if (result.created.length) await ha.notify('Hausmeister: Rundgang', `${result.summary || ''}\n\nNeue Vorschläge: ${result.created.map((id) => `#${id}`).join(', ')}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, url: this.opts.panel_url });
+        s.move(t, 'erledigt', 'Hausmeister', `${added.length} neue Vorschläge`);
+        if (added.length) await ha.notify('Hausmeister: Vorschläge', `${result.summary || ''}\n\n${added.length} neue Vorschläge, was ich anpassen würde.`.trim(), { service: this.opts.notify_service, id: 'hausmeister_vorschlaege', url: this.opts.panel_url });
         return r;
       }
 

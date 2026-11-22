@@ -31,10 +31,17 @@ keinen weiteren Rechner.
 - **Live-Fortschritt:** Du siehst, was Claude gerade tut.
 - **Kontingentschutz:** Der Hausmeister liest die Auslastung deines Claude-Abos mit und pausiert geplante
   Läufe ab einer Grenze, damit für deine andere Arbeit genug übrig bleibt.
-- **Rundgang (optional):** einmal pro Woche oder täglich nach Problemen suchen und Tickets vorschlagen.
+- **„Was würde ich anpassen?“:** Der Hausmeister schaut sich dein Haus an und schlägt vor, was sich lohnt, mit
+  Begründung, Nutzen und Aufwand. Du übernimmst einen Vorschlag mit einem Klick als Ticket oder lehnst ihn ab.
+  Auf Knopfdruck oder regelmäßig als Rundgang.
 - **Doku je Ticket** als Markdown unter `/share/hausmeister/tickets/`, dazu eine Wissensdatei über dein Haus.
 
 ## So sieht es aus
+
+**Vorschläge:** Was der Hausmeister an deinem Haus anpassen würde. Was ein Mensch vor Ort tun muss (Batterie,
+Gerät), ist als „machst du selbst“ markiert.
+
+![Vorschläge](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/vorschlaege.png)
 
 | Entwurf zum Freigeben | Neues Ticket |
 | --- | --- |
@@ -106,6 +113,10 @@ data:
     text: Bitte prüfen, ob der Entfeuchter läuft, und eine Warnung einrichten.
     modus: entwurf   # entwurf, sofort oder sammeln
 ```
+
+**Vorschläge holen:** Reiter **Vorschläge**, „Jetzt umschauen“. Oder mit `inspection_day` regelmäßig.
+Pro Vorschlag: „Als Ticket“ (Entwurf), „Sofort umsetzen“, „Nur merken“ oder „Nicht nötig“. Abgelehnte Vorschläge
+kommen nicht wieder.
 
 **Sensoren für Dashboards:** `sensor.hausmeister_wartet_auf_dich` (Tickets, die dich brauchen) und
 `sensor.hausmeister_offen` (alle offenen, mit nächstem Lauf, Kontingent und aktuellem Schritt).
