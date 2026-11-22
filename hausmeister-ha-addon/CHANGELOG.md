@@ -1,3 +1,7 @@
+## 0.1.3
+
+- Entwurf: weitere lesende Befehle erlaubt (echo, cat, sort, uniq, cut, tr, date, printf), Regeln nennen die erlaubten Befehle ausdrücklich.
+
 ## 0.1.2
 
 - Sicherung lässt Modellordner (ollama), Medien, ESPHome-Builds und Dateien über 20 MB aus; Registries in .storage werden immer gesichert.

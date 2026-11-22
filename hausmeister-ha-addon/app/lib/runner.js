@@ -12,7 +12,8 @@ const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
 const SHARE = process.env.HM_SHARE_DIR || '/share/hausmeister';
 const CLAUDE = process.env.HM_CLAUDE_BIN || 'claude';
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)'];
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)',
+  'Bash(echo:*)', 'Bash(printf:*)', 'Bash(cat:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(cut:*)', 'Bash(tr:*)', 'Bash(date:*)'];
 const WRITE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash'];
 
 const SCALE = Number(process.env.HM_TIME_SCALE || 1); // tests shorten the waits
