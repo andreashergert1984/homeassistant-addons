@@ -1,3 +1,8 @@
+## 0.5.1
+
+- Keine HA-Sicherung vor einer Umsetzung, wenn der Konfigurationsordner größer als max_backup_gb ist (Vorgabe 2 GB); eine Teilsicherung enthält immer den ganzen Ordner und dauert dann sehr lange. Die Git-Sicherung läuft weiter.
+- Das Board zeigt auch die Vorbereitung einer Umsetzung (Zustand lesen, Git-Sicherung, HA-Sicherung) statt nur „startet“.
+
 ## 0.5.0
 
 - Neuer Reiter „Vorschläge“: Was würde ich anpassen? Fehler, Sicherheit, Energie, Komfort, Aufräumen, Wartung, je mit Begründung, Nutzen und Aufwand. Übernehmen als Ticket, sofort umsetzen, merken oder ablehnen; Abgelehntes kommt nicht wieder. Handarbeit ist als „machst du selbst“ markiert.

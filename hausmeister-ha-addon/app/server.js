@@ -28,6 +28,7 @@ const opts = {
   notify_service: raw.notify_service || '',
   model: raw.model || '',
   max_quota_percent: raw.max_quota_percent === undefined ? 80 : Number(raw.max_quota_percent),
+  max_backup_gb: raw.max_backup_gb === undefined ? 2 : Number(raw.max_backup_gb),
   inspection_day: raw.inspection_day || 'aus',
   panel_url: '',
 };

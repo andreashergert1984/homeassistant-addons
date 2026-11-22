@@ -137,4 +137,5 @@ The sensors are recreated by the add-on after a restart of Home Assistant (withi
 | `notify_service` | | e.g. `notify.mobile_app_phone`. |
 | `model` | | e.g. `sonnet`, empty uses the default. |
 | `max_quota_percent` | 80 | Scheduled runs pause above this subscription usage, 0 turns it off. |
+| `max_backup_gb` | 2 | No HA backup before a change when the config folder is larger; the git snapshot still runs. |
 | `inspection_day` | aus | Inspection for suggestions: `aus`, `taeglich` or a weekday (`mo` … `so`). |

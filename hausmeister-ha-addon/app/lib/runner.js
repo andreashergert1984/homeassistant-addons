@@ -1,7 +1,7 @@
 'use strict';
 // One run: backup snapshot, then the queued tickets one after another.
 
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const ha = require('./ha');
@@ -71,6 +71,16 @@ function promptFor(t, phase, store) {
     if (prev) parts.push('', 'Frühere Umsetzung dieses Tickets:', prev.details || prev.message || '', 'Die Kommentare danach beschreiben, was nachzubessern ist.');
   }
   return parts.join('\n');
+}
+
+// Size of a folder in GB (du), null when it cannot be measured in time.
+function folderSizeGb(dir) {
+  return new Promise((resolve) => {
+    execFile('du', ['-sb', dir], { timeout: 120000 }, (err, out) => {
+      const n = Number(String(out || '').split(/\s/)[0]);
+      resolve(err || !n ? null : n / 1e9);
+    });
+  });
 }
 
 function runClaude(args, timeoutMs, onSpawn, onLine) {
@@ -210,14 +220,29 @@ class Runner {
       if (phase === 'entwerfen') {
         args.push('--permission-mode', 'default', '--allowedTools', ...READ_TOOLS, '--disallowedTools', 'Edit', 'Write', 'NotebookEdit');
       } else {
+        const cur0 = this.current;
+        const say = (text) => { cur0.step = text; cur0.steps.push({ at: new Date().toISOString(), text }); if (this.onChange) this.onChange(); };
+        say('liest den Zustand vorher (für die Wächter)');
         before = await watchSnapshot();
         before.logSince = Date.now() / 1000;
+        say('sichert die Konfiguration (Git)');
         result.pre = await git.snapshot(`vor #${t.id} ${t.title}`);
         if (this.opts.backup_before_change) {
-          try {
-            await ha.sup('POST', '/backups/new/partial', { name: `Hausmeister vor #${t.id}`, homeassistant: true, homeassistant_exclude_database: true }, { timeoutMs: 30 * 60000 });
-          } catch (e) { result.backup_error = e.message; }
+          // A partial HA backup always contains the whole config folder. With model
+          // files or media in it, that takes very long; the git snapshot covers the
+          // configuration, so the HA backup is left out above the limit.
+          const gb = await folderSizeGb(git.WORK);
+          if (gb != null && gb > this.opts.max_backup_gb) {
+            result.backup_error = `HA-Sicherung ausgelassen: der Konfigurationsordner ist ${gb.toFixed(1)} GB groß (Grenze ${this.opts.max_backup_gb} GB). Die Git-Sicherung der Konfiguration ist da.`;
+            say('HA-Sicherung ausgelassen (Ordner zu groß), Git-Sicherung ist da');
+          } else {
+            say('macht eine HA-Sicherung ohne Datenbank (kann ein paar Minuten dauern)');
+            try {
+              await ha.sup('POST', '/backups/new/partial', { name: `Hausmeister vor #${t.id}`, homeassistant: true, homeassistant_exclude_database: true }, { timeoutMs: 30 * 60000 });
+            } catch (e) { result.backup_error = e.message; }
+          }
         }
+        say('Claude startet');
         args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WRITE_TOOLS);
       }
       const cur = this.current;
