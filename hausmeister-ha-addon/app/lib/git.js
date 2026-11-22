@@ -15,7 +15,31 @@ const EXCLUDES = [
   '.storage/core.restore_state', '.storage/trace.saved_traces', '.storage/backup', '.storage/http.auth',
   '.storage/auth', '.storage/auth_provider.homeassistant', '.storage/onboarding', '.storage/cloud',
   '.storage/hacs.*', 'www/community/', 'zigbee2mqtt/log/', '*.tar', '*.tar.gz', '*.zip', '*.mp4', '*.jpg', '*.png',
+  'ollama/', 'media/', 'esphome/.esphome/', '.esphome/', 'frigate/', '.git/', '.venv/', 'venv/', '*.bin', '*.gguf', '*.safetensors',
 ];
+// Directories the size scan does not enter (also excluded above).
+const SKIP_DIRS = new Set(['ollama', 'media', '.esphome', 'frigate', '.git', '.venv', 'venv', 'node_modules', 'deps', 'tts', 'backups', '.cache', '__pycache__', 'community', 'log']);
+// Files above this size are left out, except the registries and dashboards in .storage.
+const MAX_BYTES = Number(process.env.HM_MAX_FILE_BYTES || 20 * 1024 * 1024);
+
+function largeFiles(dir = WORK, rel = '') {
+  const out = [];
+  let entries;
+  try { entries = fs.readdirSync(path.join(dir, rel), { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) out.push(...largeFiles(dir, r)); continue; }
+    if (!e.isFile() || r.startsWith('.storage/')) continue;
+    try { if (fs.statSync(path.join(dir, r)).size > MAX_BYTES) out.push(r); } catch { /* gone */ }
+  }
+  return out;
+}
+
+function writeExcludes() {
+  const big = largeFiles().map((f) => `/${f.replace(/([*?[\\])/g, '\\$1')}`);
+  fs.writeFileSync(path.join(GIT_DIR, 'info', 'exclude'), `${[...EXCLUDES, '# larger than the limit', ...big].join('\n')}\n`);
+  return big;
+}
 
 function git(args, { allowFail = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -36,11 +60,12 @@ async function init() {
     await git(['config', 'gc.auto', '256']);
   }
   fs.mkdirSync(path.join(GIT_DIR, 'info'), { recursive: true });
-  fs.writeFileSync(path.join(GIT_DIR, 'info', 'exclude'), `${EXCLUDES.join('\n')}\n`);
+  writeExcludes();
 }
 
 // Commits the current state, returns the commit id (also when nothing changed).
 async function snapshot(message) {
+  writeExcludes();
   await git(['add', '-A', '.']);
   const changed = await git(['status', '--porcelain'], { allowFail: true });
   const hasHead = !!(await git(['rev-parse', '--verify', '-q', 'HEAD'], { allowFail: true }));
@@ -72,4 +97,4 @@ async function restore(pre, post) {
   return files;
 }
 
-module.exports = { init, snapshot, changedFiles, log, restore, GIT_DIR, WORK };
+module.exports = { init, snapshot, largeFiles, changedFiles, log, restore, GIT_DIR, WORK };

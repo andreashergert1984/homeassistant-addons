@@ -209,8 +209,8 @@ async function main() {
   await git.init();
   server.listen(PORT, () => console.log(`[hausmeister] Board auf Port ${PORT}, Läufe um ${opts.run_times.join(', ')}`));
   await ha.waitForCore();
+  await publish().catch(() => {});
   await runner.backup('Start');
-  publish().catch(() => {});
   setInterval(() => { tick().catch((e) => console.error(e)); }, 30000);
   setInterval(() => { intake().catch((e) => console.error(e)); }, 60000);
   setInterval(() => { publish().catch(() => {}); }, 15 * 60000);

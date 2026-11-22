@@ -13,6 +13,10 @@ const cfg = path.join(tmp, 'config');
 fs.mkdirSync(path.join(cfg, '.storage'), { recursive: true });
 fs.writeFileSync(path.join(cfg, 'configuration.yaml'), `${'# Kommentar\n'.repeat(200)}homeassistant:\n  name: Test\n`);
 fs.writeFileSync(path.join(cfg, 'home-assistant_v2.db'), 'x');
+fs.writeFileSync(path.join(cfg, 'grosse-datei.yaml'), 'x'.repeat(5000));
+fs.writeFileSync(path.join(cfg, '.storage', 'core.entity_registry'), 'x'.repeat(5000));
+fs.mkdirSync(path.join(cfg, 'ollama', 'models'), { recursive: true });
+fs.writeFileSync(path.join(cfg, 'ollama', 'models', 'blob'), 'x');
 
 const calls = [];
 let statesNow = { 'light.flur': 'on', 'sensor.temp': '21' };
@@ -58,7 +62,7 @@ test.before(async () => {
     SUPERVISOR_TOKEN: 'test', HA_CORE_URL: `http://127.0.0.1:${port}/api`, HA_SUPERVISOR_URL: `http://127.0.0.1:${port}/sup`,
     HM_GIT_DIR: path.join(tmp, 'git'), HM_CONFIG_DIR: cfg, HM_WORK_DIR: tmp, HM_SHARE_DIR: path.join(tmp, 'share'),
     HM_STATE: path.join(tmp, 'state.json'), HM_OPTIONS: path.join(tmp, 'options.json'), HM_CLAUDE_BIN: fakeClaude,
-    HM_TIME_SCALE: '0.001', CLAUDE_CODE_OAUTH_TOKEN: 'x',
+    HM_TIME_SCALE: '0.001', HM_MAX_FILE_BYTES: '4000', CLAUDE_CODE_OAUTH_TOKEN: 'x',
   });
   fs.writeFileSync(process.env.HM_OPTIONS, JSON.stringify({ run_times: ['11:00'], intake_todo: '', auto_draft: true }));
   mod = require('../server');
@@ -124,6 +128,9 @@ test('kompletter Ablauf mit Entwurf, Freigabe, Umsetzung und Rückrollung', asyn
   assert.ok(backups.some((b) => b.msg.startsWith('nach #')) && backups.some((b) => b.msg.startsWith('Rückrollung #')));
   const tracked = require('child_process').execFileSync('git', [`--git-dir=${process.env.HM_GIT_DIR}`, 'ls-files'], { encoding: 'utf8' });
   assert.ok(!tracked.includes('.db'), 'Datenbank nicht in der Sicherung');
+  assert.ok(!tracked.includes('ollama'), 'Modelle nicht in der Sicherung');
+  assert.ok(!tracked.includes('grosse-datei.yaml'), 'zu große Datei nicht in der Sicherung');
+  assert.ok(tracked.includes('.storage/core.entity_registry'), 'Registry trotz Größe gesichert');
 });
 
 test('Wächter: geschrumpfte Datei und verschwundene Entität führen zu "pruefen"', async () => {

@@ -1,3 +1,8 @@
+## 0.1.2
+
+- Sicherung lässt Modellordner (ollama), Medien, ESPHome-Builds und Dateien über 20 MB aus; Registries in .storage werden immer gesichert.
+- Sensoren erscheinen gleich nach dem Start, nicht erst nach der ersten Sicherung.
+
 ## 0.1.1
 
 - Basisimage direkt im Dockerfile (build.yaml entfernt), damit der Supervisor das Image baut.

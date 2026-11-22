@@ -41,7 +41,8 @@ Runs start at the configured times. Without queued tickets Claude is not started
   devices, touching add-ons, updates, users or secrets, and require a configuration check before
   any reload or restart.
 - Before each implementation: a git snapshot of `/config` (separate repository in the add-on's
-  data, databases, logs and auth files excluded) and, unless turned off, a partial HA backup
+  data; databases, logs, auth files, model folders such as `ollama/`, media and files larger than
+  20 MB are excluded, the registries in `.storage` are always included) and, unless turned off, a partial HA backup
   without the database.
 - After each implementation the watches compare the system with the state before: configuration
   check, YAML and dashboard files that shrank by more than 30 % or disappeared, entities that
