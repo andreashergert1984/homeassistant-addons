@@ -1,3 +1,12 @@
+## 0.3.0
+
+- Push-Benachrichtigungen mit Knöpfen (Jetzt umsetzen, Verwerfen, Antworten, Passt, Nachbessern, Erneut versuchen); Tippen öffnet das Board.
+- Live-Fortschritt: das Board zeigt, was Claude gerade tut; jeder Bericht enthält die Schritte.
+- Kontingentschutz: Auslastung des Abos sichtbar, geplante Läufe pausieren über der Grenze (Vorgabe 80 %).
+- Wächter zwischen den Läufen (geschrumpfte Dateien, viele verschwundene Entitäten) und neue Fehler im HA-Log nach einer Umsetzung.
+- Tickets aus Automationen über das Ereignis hausmeister_neues_ticket.
+- Optionaler Rundgang (Wochentag oder täglich): nur lesend, bis zu fünf Vorschläge als neue Tickets.
+
 ## 0.2.0
 
 - Sofort umsetzen: beim Anlegen, als Knopf im Ticket oder per To-do-Eintrag mit „sofort:“ oder „!“. Startet gleich, ohne auf den Zeitplan zu warten; ohne Entwurf plant und setzt Claude in einem Lauf um und fragt bei riskanten Änderungen nach. Andere wartende Tickets bleiben beim Zeitplan.

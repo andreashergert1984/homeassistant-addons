@@ -20,6 +20,12 @@ configuration:
   notify_service:
     name: Notification service
     description: "Optional, e.g. notify.mobile_app_phone. Reports drafts, questions, implementations and watch alarms."
+  max_quota_percent:
+    name: Quota limit (%)
+    description: Above this utilization of the subscription (highest window reported by Claude Code) scheduled runs are skipped until the window resets. Immediate tickets still run. 0 turns it off.
+  inspection_day:
+    name: Inspection
+    description: On this day the first run looks for problems (read only) and creates up to five proposals as new tickets. aus (off), taeglich (daily) or a weekday (mo, di, mi, do, fr, sa, so).
   model:
     name: Model
     description: Optional, e.g. sonnet or opus. Empty uses the Claude Code default.

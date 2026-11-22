@@ -97,6 +97,38 @@ test('Ergebnis von Claude auswerten', () => {
   assert.strictEqual(L.interpretResult('entwerfen', JSON.stringify({ result: 'kein json' })).kind, 'fehler');
 });
 
+test('Fortschritt, Kontingent und Benachrichtigungsknöpfe', () => {
+  assert.strictEqual(L.stepText('Read', { file_path: '/homeassistant/automations.yaml' }), 'liest automations.yaml');
+  assert.strictEqual(L.stepText('Bash', { command: 'ha-read states', description: 'Zustände lesen' }), 'Zustände lesen');
+  assert.strictEqual(L.stepText('Bash', { command: 'ha-read check' }), 'führt aus: ha-read check');
+  const raw = [
+    JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { seven_day: { utilization: 0.42, resetsAt: 100 }, five_hour: { utilization: 0.1, resetsAt: 50 } } } }),
+    'kein json',
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: { pattern: 'flur' } }] } }),
+    JSON.stringify({ type: 'result', is_error: false, structured_output: { status: 'entwurf', zusammenfassung: 'z', details: 'd' } }),
+  ].join('\n');
+  const p = L.parseStream(raw);
+  assert.deepStrictEqual(p.steps, ['sucht nach "flur"']);
+  assert.deepStrictEqual(p.quota, { window: 'seven_day', utilization: 0.42, resetsAt: 100, status: undefined });
+  assert.strictEqual(L.interpretResult('entwerfen', raw).kind, 'entwurf', 'Streamformat wird ausgewertet');
+  assert.strictEqual(L.quotaBlocks({ utilization: 0.8, resetsAt: 200 }, 80, 100), true);
+  assert.strictEqual(L.quotaBlocks({ utilization: 0.79, resetsAt: 200 }, 80, 100), false);
+  assert.strictEqual(L.quotaBlocks({ utilization: 0.95, resetsAt: 50 }, 80, 100), false, 'Fenster schon erneuert');
+  assert.strictEqual(L.quotaBlocks({ utilization: 0.95 }, 0, 100), false, '0 schaltet aus');
+  assert.deepStrictEqual(L.notifyActions('entwurf', 7).map((a) => a.action), ['HAUSMEISTER_SOFORT_7', 'HAUSMEISTER_UMSETZEN_7', 'HAUSMEISTER_VERWERFEN_7']);
+  assert.strictEqual(L.notifyActions('rueckfrage', 7)[0].behavior, 'textInput');
+  assert.deepStrictEqual(L.notifyActions('erledigt', 7), []);
+  for (const s of ['entwurf', 'rueckfrage', 'umgesetzt', 'pruefen', 'fehler']) {
+    for (const a of L.notifyActions(s, 3)) {
+      const p2 = L.parseNotifyAction(a.action);
+      assert.ok(p2 && p2.id === 3, a.action);
+      assert.ok(L.ACTIONS[p2.key].from.includes(s), `${a.action} ist im Zustand ${s} erlaubt`);
+    }
+  }
+  assert.strictEqual(L.parseNotifyAction('HAUSMEISTER_GIBTSNICHT_1'), null);
+  assert.strictEqual(L.parseNotifyAction('ANDERES'), null);
+});
+
 test('Dateinamen', () => {
   assert.strictEqual(L.slug('Flurlicht über Nacht dimmen!'), 'flurlicht-ueber-nacht-dimmen');
   assert.strictEqual(L.slug('???'), 'ticket');

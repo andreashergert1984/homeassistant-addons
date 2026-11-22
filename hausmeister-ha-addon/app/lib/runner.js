@@ -40,7 +40,14 @@ async function watchSnapshot() {
   return { states: await ha.states(), files: configFiles() };
 }
 
+const RUNDGANG = [
+  'Aufgabe: RUNDGANG. Du gehst nur lesend durch die Installation und suchst Dinge, die ein Hausmeister angehen sollte. Ändere nichts.',
+  'Prüfe insbesondere: offene Reparaturen (ha-read ws repairs/list_issues), Entitäten, die seit über 24 Stunden nicht verfügbar sind, Automationen und Skripte mit Fehlern in den letzten Ausführungen (ha-read ws trace/list), Warnungen und Fehler im Log (ha-read log 500), Konfigurationsprüfung (ha-read check), leere oder schwache Batterien von Geräten.',
+  'Fasse in details zusammen, was du gefunden hast, und schlage in vorschlaege höchstens fünf konkrete Tickets vor, die sich lohnen (titel kurz, text mit Befund und Ziel). Nichts vorschlagen, was in WISSEN.md als bewusst so vermerkt ist. Status entwurf.',
+].join('\n');
+
 function promptFor(t, phase) {
+  if (t.kind === 'rundgang') return RUNDGANG;
   const parts = [`Ticket #${t.id}: ${t.title}`, '', t.text || '(keine Beschreibung)', ''];
   if (t.comments.length) parts.push('Kommentare:', ...t.comments.map((c) => `- ${c.at} ${c.by}: ${c.text}`), '');
   const last = [...t.results].reverse().find((r) => r.phase === 'entwerfen' && r.kind === 'entwurf');
@@ -62,13 +69,21 @@ function promptFor(t, phase) {
   return parts.join('\n');
 }
 
-function runClaude(args, timeoutMs, onSpawn) {
+function runClaude(args, timeoutMs, onSpawn, onLine) {
   return new Promise((resolve) => {
     const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: { ...process.env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     if (onSpawn) onSpawn(child);
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => { stdout += d; });
+    let pending = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+      if (!onLine) return;
+      pending += d;
+      const lines = pending.split('\n');
+      pending = lines.pop();
+      for (const l of lines) { try { onLine(JSON.parse(l)); } catch { /* not a JSON line */ } }
+    });
     child.stderr.on('data', (d) => { stderr += d; if (stderr.length > 20000) stderr = stderr.slice(-20000); });
     const timer = setTimeout(() => { child.kill('SIGTERM'); setTimeout(() => child.kill('SIGKILL'), 10000); }, timeoutMs);
     child.on('error', (e) => { clearTimeout(timer); resolve({ code: -1, stdout, stderr: `${stderr}\n${e.message}` }); });
@@ -84,6 +99,37 @@ class Runner {
     this.current = null;
     this.child = null;
     this.pending = new Set();
+    this.baselineFile = process.env.HM_BASELINE || '/data/baseline.json';
+  }
+
+  // Usage of the subscription as reported by Claude Code (rate_limit_event).
+  setQuota(q) {
+    if (!q) return;
+    this.store.data.quota = { ...q, seen: new Date().toISOString() };
+    this.store.save();
+  }
+
+  quotaBlocked() {
+    return L.quotaBlocks(this.store.data.quota, this.opts.max_quota_percent, Math.floor(Date.now() / 1000));
+  }
+
+  // Compares the house with the state of the previous run, independent of tickets.
+  async watchdog() {
+    const now = await watchSnapshot();
+    let prev = null;
+    try { prev = JSON.parse(fs.readFileSync(this.baselineFile, 'utf8')); } catch { /* first run */ }
+    fs.writeFileSync(this.baselineFile, JSON.stringify(now));
+    if (!prev) return [];
+    const w = L.compareWatch(prev, now);
+    const reasons = [];
+    if (w.shrunk.length) reasons.push(`Seit dem letzten Lauf geschrumpft oder gelöscht: ${w.shrunk.map((s) => `${s.file} (${s.before} → ${s.after} Byte)`).join(', ')}`);
+    if (w.vanished.length >= (this.opts.watchdog_vanished_min || 10)) reasons.push(`Seit dem letzten Lauf ${w.vanished.length} Entitäten verschwunden, z. B. ${w.vanished.slice(0, 10).join(', ')}`);
+    if (reasons.length) {
+      this.store.data.watchdog = { at: new Date().toISOString(), reasons };
+      this.store.save();
+      await ha.notify('Hausmeister: Wächter', `${reasons.join('\n')}\n\nDas betrifft keine Hausmeister-Umsetzung. Prüfen, ob es gewollt war; Sicherungen gibt es im Reiter Sicherungen.`, { service: this.opts.notify_service, id: 'hausmeister_waechter', url: this.opts.panel_url });
+    }
+    return reasons;
   }
 
   loggedIn() {
@@ -111,8 +157,16 @@ class Runner {
     const run = { at: new Date().toISOString(), reason, by, tickets: [], note: '' };
     try {
       run.backup = await this.backup(reason);
+      if (!only) {
+        try { run.watchdog = await this.watchdog(); } catch (e) { run.watchdog = [`Wächter: ${e.message}`]; }
+      }
       const queue = L.pickQueue(this.store.data.tickets, this.opts.max_tickets_per_run, only);
       if (!queue.length) { run.note = 'nichts zu tun'; return run; }
+      if (!only && by === 'Zeitplan' && this.quotaBlocked()) {
+        const q = this.store.data.quota;
+        run.note = `Kontingent bei ${Math.round(q.utilization * 100)} % (Grenze ${this.opts.max_quota_percent} %), geplanter Lauf ausgelassen bis ${q.resetsAt ? new Date(q.resetsAt * 1000).toLocaleString('de-DE') : 'zur Erneuerung'}`;
+        return run;
+      }
       if (!this.loggedIn()) {
         run.note = 'Claude ist nicht angemeldet';
         await ha.notify('Hausmeister', 'Claude ist nicht angemeldet. Bitte in der Seitenleiste unter Hausmeister, Anmeldung, einloggen.', { service: this.opts.notify_service, id: 'hausmeister_login' });
@@ -139,13 +193,13 @@ class Runner {
 
   async process(t, phase) {
     const s = this.store;
-    this.current = { id: t.id, phase, since: new Date().toISOString() };
+    this.current = { id: t.id, phase, since: new Date().toISOString(), step: 'startet', steps: [] };
     s.move(t, 'in_arbeit', 'Hausmeister', phase === 'entwerfen' ? 'Entwurf läuft' : 'Umsetzung läuft');
     if (this.onChange) this.onChange();
     const result = { at: new Date().toISOString(), phase };
     let before = null;
     try {
-      const args = ['-p', promptFor(t, phase), '--output-format', 'json', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
+      const args = ['-p', promptFor(t, phase), '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
         '--add-dir', git.WORK, '--add-dir', SHARE];
       if (this.opts.model) args.push('--model', this.opts.model);
       if (t.session_id) args.push('--resume', t.session_id);
@@ -153,6 +207,7 @@ class Runner {
         args.push('--permission-mode', 'default', '--allowedTools', ...READ_TOOLS, '--disallowedTools', 'Edit', 'Write', 'NotebookEdit');
       } else {
         before = await watchSnapshot();
+        before.logSince = Date.now() / 1000;
         result.pre = await git.snapshot(`vor #${t.id} ${t.title}`);
         if (this.opts.backup_before_change) {
           try {
@@ -161,12 +216,34 @@ class Runner {
         }
         args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WRITE_TOOLS);
       }
-      const proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; });
+      const cur = this.current;
+      const onLine = (m) => {
+        if (m.type === 'rate_limit_event' && m.rate_limit_info) this.setQuota(L.quotaFrom(m.rate_limit_info));
+        if (m.type === 'assistant' && m.message && Array.isArray(m.message.content)) {
+          for (const c of m.message.content) {
+            if (c.type !== 'tool_use') continue;
+            cur.step = L.stepText(c.name, c.input);
+            cur.steps.push({ at: new Date().toISOString(), text: cur.step });
+            if (cur.steps.length > 200) cur.steps.shift();
+          }
+        }
+      };
+      const proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine);
       this.child = null;
+      result.steps = cur.steps.slice(-80).map((x) => x.text);
       const r = proc.signal ? { kind: 'fehler', message: `abgebrochen nach ${this.opts.run_timeout_minutes} Minuten` } : L.interpretResult(phase, proc.stdout || proc.stderr);
       if (r.session_id) t.session_id = r.session_id;
       Object.assign(result, { kind: r.kind, message: r.message, cost: r.cost, turns: r.turns, denied: r.denied });
       if (r.out) Object.assign(result, { summary: r.out.zusammenfassung, details: r.out.details, question: r.out.frage, files: r.out.geaenderte_dateien || [], api: r.out.ha_aenderungen || [], test: r.out.test });
+
+      if (t.kind === 'rundgang' && r.kind === 'entwurf') {
+        const proposals = (r.out.vorschlaege || []).slice(0, 5);
+        result.created = proposals.map((p) => s.create({ title: p.titel, text: p.text, by: 'Rundgang', source: 'rundgang', state: 'neu' }).id);
+        t.results.push(result);
+        s.move(t, 'erledigt', 'Hausmeister', `${result.created.length} Vorschläge als neue Tickets angelegt`);
+        if (result.created.length) await ha.notify('Hausmeister: Rundgang', `${result.summary || ''}\n\nNeue Vorschläge: ${result.created.map((id) => `#${id}`).join(', ')}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, url: this.opts.panel_url });
+        return r;
+      }
 
       if (phase === 'umsetzen') {
         await sleep(20000); // HA writes .storage with a delay
@@ -174,6 +251,7 @@ class Runner {
         result.post = await git.snapshot(`nach #${t.id} ${t.title}`);
         result.changed = (await git.changedFiles(result.pre, result.post)).map((f) => f.file);
         result.watch = await this.watch(before);
+        result.log_errors = await this.newLogErrors(before.logSince);
         t.snapshot = { pre: result.pre, post: result.post };
       }
 
@@ -212,6 +290,15 @@ class Runner {
     return reasons;
   }
 
+  // Errors in the HA log since the start of the implementation (shown as a hint, no alarm).
+  async newLogErrors(since) {
+    try {
+      const list = await ha.ws('system_log/list');
+      return list.filter((e) => ['ERROR', 'CRITICAL'].includes(e.level) && Number(e.timestamp) >= since)
+        .slice(0, 10).map((e) => `${e.name}: ${[].concat(e.message || []).join(' ').slice(0, 200)}`);
+    } catch { return []; }
+  }
+
   async tell(t, to, result) {
     const msgs = {
       entwurf: 'Entwurf liegt vor, bitte ansehen und freigeben.',
@@ -221,7 +308,7 @@ class Runner {
       fehler: `Fehler: ${result.message || ''}`,
     };
     if (!msgs[to]) return;
-    await ha.notify(`Hausmeister #${t.id}: ${t.title}`, `${msgs[to]}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}` });
+    await ha.notify(`Hausmeister #${t.id}: ${t.title}`, `${msgs[to]}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, actions: L.notifyActions(to, t.id), url: this.opts.panel_url });
   }
 
   async rollback(t, by) {

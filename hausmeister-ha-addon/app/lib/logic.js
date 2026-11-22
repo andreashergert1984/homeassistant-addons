@@ -123,10 +123,82 @@ function watchAlarm(w, check) {
   return reasons;
 }
 
-// Result of a Claude run (output-format json) to ticket outcome.
+// Short German description of a tool call, for the live progress.
+function stepText(name, input = {}) {
+  const f = (p) => String(p || '').replace(/^\/homeassistant\//, '');
+  switch (name) {
+    case 'Read': return `liest ${f(input.file_path)}`;
+    case 'Edit': return `ändert ${f(input.file_path)}`;
+    case 'Write': return `schreibt ${f(input.file_path)}`;
+    case 'Grep': return `sucht nach "${String(input.pattern || '').slice(0, 60)}"`;
+    case 'Glob': return `sucht Dateien ${String(input.pattern || '').slice(0, 60)}`;
+    case 'WebSearch': return `sucht im Netz: ${String(input.query || '').slice(0, 60)}`;
+    case 'WebFetch': return `liest ${String(input.url || '').slice(0, 80)}`;
+    case 'Bash': return input.description ? String(input.description).slice(0, 100) : `führt aus: ${String(input.command || '').slice(0, 80)}`;
+    case 'StructuredOutput': return 'schreibt das Ergebnis';
+    default: return name;
+  }
+}
+
+// Output of --output-format stream-json: one JSON object per line.
+function parseStream(raw) {
+  const steps = [];
+  let result = null;
+  let quota = null;
+  for (const line of String(raw).split('\n')) {
+    if (!line.trim()) continue;
+    let m;
+    try { m = JSON.parse(line); } catch { continue; }
+    if (m.type === 'result') result = m;
+    else if (m.type === 'rate_limit_event' && m.rate_limit_info) quota = quotaFrom(m.rate_limit_info);
+    else if (m.type === 'assistant' && m.message && Array.isArray(m.message.content)) {
+      for (const c of m.message.content) if (c.type === 'tool_use') steps.push(stepText(c.name, c.input));
+    }
+  }
+  return { result, quota, steps };
+}
+
+// Highest utilization over the reported windows (five hours, seven days).
+function quotaFrom(info) {
+  const wins = Object.entries(info.unifiedWindows || {}).map(([k, w]) => ({ window: k, utilization: Number(w.utilization || 0), resetsAt: w.resetsAt || info.resetsAt, status: w.status }));
+  if (!wins.length) return { window: info.rateLimitType || '', utilization: null, resetsAt: info.resetsAt || null, status: info.status };
+  return wins.sort((a, b) => b.utilization - a.utilization)[0];
+}
+
+// Scheduled runs stop above the limit until the window resets; immediate runs are not limited.
+function quotaBlocks(quota, maxPercent, nowSec) {
+  if (!quota || !maxPercent || quota.utilization == null) return false;
+  if (quota.resetsAt && quota.resetsAt <= nowSec) return false;
+  return quota.utilization * 100 >= maxPercent;
+}
+
+// Buttons of a push notification per state (mobile app actionable notifications).
+function notifyActions(state, id) {
+  const a = (key, title, extra = {}) => ({ action: `HAUSMEISTER_${key}_${id}`, title, ...extra });
+  switch (state) {
+    case 'entwurf': return [a('SOFORT', 'Jetzt umsetzen'), a('UMSETZEN', 'Beim nächsten Lauf'), a('VERWERFEN', 'Verwerfen')];
+    case 'rueckfrage': return [a('ANTWORTEN', 'Antworten', { behavior: 'textInput', textInputButtonTitle: 'Senden', textInputPlaceholder: 'Antwort an Claude' })];
+    case 'umgesetzt': return [a('ABNEHMEN', 'Passt'), a('NACHBESSERN', 'Nachbessern', { behavior: 'textInput', textInputButtonTitle: 'Senden', textInputPlaceholder: 'Was soll anders sein?' })];
+    case 'pruefen': return [a('NACHBESSERN', 'Nachbessern', { behavior: 'textInput', textInputButtonTitle: 'Senden', textInputPlaceholder: 'Was soll anders sein?' })];
+    case 'fehler': return [a('WIEDERHOLEN', 'Erneut versuchen')];
+    default: return [];
+  }
+}
+
+function parseNotifyAction(action) {
+  const m = /^HAUSMEISTER_([A-Z]+)_(\d+)$/.exec(String(action || ''));
+  if (!m) return null;
+  const key = m[1].toLowerCase();
+  return ACTIONS[key] ? { key, id: Number(m[2]) } : null;
+}
+
+// Result of a Claude run (stream-json or json) to ticket outcome.
 function interpretResult(phase, raw) {
   let res;
-  try { res = JSON.parse(raw); } catch { return { kind: 'fehler', message: `Antwort nicht lesbar: ${String(raw).slice(0, 300)}` }; }
+  try { res = JSON.parse(raw); } catch {
+    res = parseStream(raw).result;
+    if (!res) return { kind: 'fehler', message: `Antwort nicht lesbar: ${String(raw).slice(-300)}` };
+  }
   if (Array.isArray(res)) res = res.filter((m) => m && m.type === 'result').pop() || {};
   const text = typeof res.result === 'string' ? res.result : '';
   if (res.is_error) {
@@ -155,6 +227,7 @@ const RESULT_SCHEMA = {
     geaenderte_dateien: { type: 'array', items: { type: 'string' } },
     ha_aenderungen: { type: 'array', items: { type: 'string' }, description: 'Über die API geänderte Dinge, z. B. Dashboard xyz, Automation abc' },
     test: { type: 'string', description: 'Wie man das Ergebnis selbst prüft' },
+    vorschlaege: { type: 'array', description: 'Nur beim Rundgang: vorgeschlagene Tickets', items: { type: 'object', properties: { titel: { type: 'string' }, text: { type: 'string' } }, required: ['titel', 'text'] } },
   },
   required: ['status', 'zusammenfassung', 'details'],
 };
@@ -170,4 +243,4 @@ function slug(s) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'ticket';
 }
 
-module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, parseIntake };
+module.exports = { STATES, ACTIONS, actionsFor, applyAction, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };

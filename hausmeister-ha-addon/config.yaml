@@ -1,6 +1,6 @@
 ---
 name: Hausmeister
-version: "0.2.0"
+version: "0.3.0"
 slug: hausmeister
 description: >-
   Tickets für das Smart Home, die Claude Code nach deiner Freigabe bearbeitet:
@@ -48,6 +48,8 @@ options:
   intake_todo: todo.hausmeister
   notify_service: ""
   model: ""
+  max_quota_percent: 80
+  inspection_day: aus
 
 schema:
   run_times:
@@ -59,3 +61,5 @@ schema:
   intake_todo: str?
   notify_service: str?
   model: str?
+  max_quota_percent: int(0,100)
+  inspection_day: list(aus|taeglich|mo|di|mi|do|fr|sa|so)

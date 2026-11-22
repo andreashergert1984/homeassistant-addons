@@ -33,14 +33,14 @@ class Store {
     return t;
   }
 
-  create({ title, text, by, state = 'neu', source = 'board', direct = false }) {
+  create({ title, text, by, state = 'neu', source = 'board', direct = false, kind = 'ticket' }) {
     title = String(title || '').trim();
     if (!title) throw new Error('Titel fehlt');
     const t = {
       id: this.data.next_id++, title: title.slice(0, 200), text: String(text || '').trim(), state,
       phase: ['entwerfen', 'umsetzen'].includes(state) ? state : null, created: this.now(), updated: this.now(), created_by: by || 'unbekannt', source,
       comments: [], history: [{ at: this.now(), to: state, by: by || 'unbekannt' }], results: [],
-      session_id: null, snapshot: null, watch: null, direct: !!direct,
+      session_id: null, snapshot: null, watch: null, direct: !!direct, kind,
     };
     this.data.tickets.push(t);
     this.touch(t);

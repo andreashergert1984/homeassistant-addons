@@ -44,10 +44,18 @@ const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(path.join(tmp, 'claude-args.log'))}, JSON.stringify(a) + '\\n');
 const draft = a[a.indexOf('--permission-mode') + 1] === 'default';
 if (!draft) fs.appendFileSync(${JSON.stringify(path.join(cfg, 'configuration.yaml'))}, 'automation: !include automations.yaml\\n');
-const out = draft
-  ? { status: 'entwurf', zusammenfassung: 'Ich würde eine Zeile ergänzen.', details: '- configuration.yaml: automation einbinden' }
-  : { status: 'umgesetzt', zusammenfassung: 'Zeile ergänzt.', details: 'erledigt', geaenderte_dateien: ['configuration.yaml'] };
-process.stdout.write(JSON.stringify({ type: 'result', is_error: false, session_id: 'sess-1', num_turns: 3, result: '', structured_output: out }));
+const rundgang = a[a.indexOf('-p') + 1].startsWith('Aufgabe: RUNDGANG');
+const out = rundgang
+  ? { status: 'entwurf', zusammenfassung: 'Zwei Dinge gefunden.', details: 'Befunde', vorschlaege: [{ titel: 'Batterie Flursensor', text: 'leer' }, { titel: 'Reparatur offen', text: 'x' }] }
+  : draft
+    ? { status: 'entwurf', zusammenfassung: 'Ich würde eine Zeile ergänzen.', details: '- configuration.yaml: automation einbinden' }
+    : { status: 'umgesetzt', zusammenfassung: 'Zeile ergänzt.', details: 'erledigt', geaenderte_dateien: ['configuration.yaml'] };
+const say = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+say({ type: 'system', subtype: 'init' });
+say({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.2, resetsAt: 4102444800 }, seven_day: { utilization: Number(process.env.FAKE_QUOTA || 0.1), resetsAt: 4102444800 } } } });
+say({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/homeassistant/configuration.yaml' } }] } });
+say({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ha-read states', description: 'Zustände lesen' } }] } });
+say({ type: 'result', is_error: false, session_id: 'sess-1', num_turns: 3, result: '', structured_output: out });
 `);
 fs.chmodSync(fakeClaude, 0o755);
 
@@ -62,7 +70,7 @@ test.before(async () => {
     SUPERVISOR_TOKEN: 'test', HA_CORE_URL: `http://127.0.0.1:${port}/api`, HA_SUPERVISOR_URL: `http://127.0.0.1:${port}/sup`,
     HM_GIT_DIR: path.join(tmp, 'git'), HM_CONFIG_DIR: cfg, HM_WORK_DIR: tmp, HM_SHARE_DIR: path.join(tmp, 'share'),
     HM_STATE: path.join(tmp, 'state.json'), HM_OPTIONS: path.join(tmp, 'options.json'), HM_CLAUDE_BIN: fakeClaude,
-    HM_TIME_SCALE: '0.001', HM_MAX_FILE_BYTES: '4000', CLAUDE_CODE_OAUTH_TOKEN: 'x',
+    HM_TIME_SCALE: '0.001', HM_MAX_FILE_BYTES: '4000', HM_BASELINE: path.join(tmp, 'baseline.json'), CLAUDE_CODE_OAUTH_TOKEN: 'x',
   });
   fs.writeFileSync(process.env.HM_OPTIONS, JSON.stringify({ run_times: ['11:00'], intake_todo: '', auto_draft: true }));
   mod = require('../server');
@@ -96,6 +104,8 @@ test('kompletter Ablauf mit Entwurf, Freigabe, Umsetzung und Rückrollung', asyn
   assert.strictEqual(t.session_id, 'sess-1');
   const draftArgs = JSON.parse(fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n')[0]);
   assert.ok(draftArgs.includes('Bash(ha-read:*)') && !draftArgs.includes('Bash'), 'Entwurf nur mit lesenden Werkzeugen');
+  assert.deepStrictEqual(t.results[0].steps, ['liest configuration.yaml', 'Zustände lesen'], 'Schritte mitgeschrieben');
+  assert.strictEqual(mod.store.data.quota.window, 'five_hour', 'höchstes Fenster gemerkt');
   assert.ok(draftArgs.includes('Edit') && draftArgs.indexOf('--disallowedTools') < draftArgs.indexOf('Edit'));
 
   assert.strictEqual((await post(`/api/tickets/${id}/action`, { action: 'abnehmen' })).status, 400, 'Abnahme vor Umsetzung abgelehnt');
@@ -149,6 +159,69 @@ test('Sofort umsetzen: startet ohne Zeitplan, plant und setzt in einem Lauf um',
   assert.strictEqual((await get('/api/state')).runs[0].reason, 'sofort');
   assert.strictEqual((await post('/api/tickets', { title: 'x', mode: 'quatsch' })).status, 400);
   await post(`/api/tickets/${other}/action`, { action: 'verwerfen' });
+});
+
+test('Knöpfe in der Benachrichtigung und Tickets aus Ereignissen', async () => {
+  const id = (await post('/api/tickets', { title: 'Push-Test', mode: 'entwurf' })).body.id;
+  await mod.runner.cycle('Test');
+  const note = calls.filter((c) => c === 'POST /api/services/persistent_notification/create').length;
+  assert.ok(note > 0);
+  await mod.onEvent({ event_type: 'mobile_app_notification_action', data: { action: `HAUSMEISTER_SOFORT_${id}` }, context: {} });
+  for (let i = 0; i < 200 && (await get(`/api/tickets/${id}`)).state !== 'umgesetzt'; i++) await new Promise((r) => setTimeout(r, 25));
+  let t = await get(`/api/tickets/${id}`);
+  assert.strictEqual(t.state, 'umgesetzt');
+  assert.strictEqual(t.direct, false, 'Jetzt umsetzen aus dem Entwurf setzt den Entwurf um');
+  await mod.onEvent({ event_type: 'mobile_app_notification_action', data: { action: `HAUSMEISTER_NACHBESSERN_${id}`, reply_text: 'heller bitte' }, context: {} });
+  t = await get(`/api/tickets/${id}`);
+  assert.strictEqual(t.state, 'umsetzen');
+  assert.strictEqual(t.comments[t.comments.length - 1].text, 'heller bitte');
+  await post(`/api/tickets/${id}/action`, { action: 'verwerfen' });
+  await mod.onEvent({ event_type: 'mobile_app_notification_action', data: { action: 'ANDERE_APP_1' }, context: {} });
+  await mod.onEvent({ event_type: 'hausmeister_neues_ticket', data: { titel: 'Aus Automation', text: 'Luftfeuchte hoch', modus: 'sammeln' } });
+  const st = await get('/api/state');
+  const ev = st.tickets.find((x) => x.title === 'Aus Automation');
+  assert.ok(ev && ev.state === 'neu' && ev.created_by === 'Automation');
+});
+
+test('Kontingentgrenze lässt geplante Läufe aus, Sofort läuft trotzdem', async () => {
+  mod.store.data.quota = { window: 'seven_day', utilization: 0.85, resetsAt: 4102444800 };
+  mod.opts.max_quota_percent = 80;
+  const id = (await post('/api/tickets', { title: 'Wartet', mode: 'entwurf' })).body.id;
+  const run = await mod.runner.cycle('Zeitplan 11:00');
+  assert.match(run.note, /Kontingent bei 85 %/);
+  assert.strictEqual((await get(`/api/tickets/${id}`)).state, 'entwerfen');
+  assert.strictEqual((await get('/api/state')).quota_blocked, true);
+  mod.store.data.quota.resetsAt = 1;
+  assert.strictEqual(mod.runner.quotaBlocked(), false, 'nach der Erneuerung frei');
+  await post(`/api/tickets/${id}/action`, { action: 'verwerfen' });
+});
+
+test('Rundgang legt Vorschläge als neue Tickets an', async () => {
+  mod.opts.inspection_day = 'taeglich';
+  const day = new Date();
+  const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')} ${mod.opts.run_times[0]}`;
+  mod.maybeInspection(key);
+  mod.maybeInspection(key);
+  const rg = mod.store.data.tickets.filter((x) => x.kind === 'rundgang');
+  assert.strictEqual(rg.length, 1, 'nur ein Rundgang am Tag');
+  await mod.runner.cycle('Test');
+  const t = await get(`/api/tickets/${rg[0].id}`);
+  assert.strictEqual(t.state, 'erledigt');
+  const created = t.results[t.results.length - 1].created;
+  assert.strictEqual(created.length, 2);
+  assert.strictEqual((await get(`/api/tickets/${created[0]}`)).state, 'neu');
+  const args = fs.readFileSync(path.join(tmp, 'claude-args.log'), 'utf8').trim().split('\n').map(JSON.parse).pop();
+  assert.strictEqual(args[args.indexOf('--permission-mode') + 1], 'default', 'Rundgang nur lesend');
+});
+
+test('Wächter zwischen den Läufen melden Schäden von außen', async () => {
+  fs.rmSync(process.env.HM_BASELINE, { force: true });
+  await mod.runner.cycle('Zeitplan 11:00');
+  fs.writeFileSync(path.join(cfg, 'configuration.yaml'), 'kaputt\n');
+  const run = await mod.runner.cycle('Zeitplan 16:00');
+  assert.ok(run.watchdog.some((r) => /configuration\.yaml/.test(r)), JSON.stringify(run.watchdog));
+  assert.ok((await get('/api/state')).watchdog.reasons.length);
+  fs.writeFileSync(path.join(cfg, 'configuration.yaml'), `${'# Kommentar\n'.repeat(200)}homeassistant:\n  name: Test\n`);
 });
 
 test('Wächter: geschrumpfte Datei und verschwundene Entität führen zu "pruefen"', async () => {

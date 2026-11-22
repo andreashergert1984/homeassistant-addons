@@ -27,7 +27,11 @@ const opts = {
   intake_todo: raw.intake_todo === undefined ? 'todo.hausmeister' : String(raw.intake_todo || ''),
   notify_service: raw.notify_service || '',
   model: raw.model || '',
+  max_quota_percent: raw.max_quota_percent === undefined ? 80 : Number(raw.max_quota_percent),
+  inspection_day: raw.inspection_day || 'aus',
+  panel_url: '',
 };
+const WEEKDAYS = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
 
 fs.mkdirSync(SHARE, { recursive: true });
 const store = new Store(process.env.HM_STATE || '/data/state.json', path.join(SHARE, 'tickets'));
@@ -47,7 +51,9 @@ async function publish() {
     friendly_name: 'Hausmeister offene Tickets', icon: 'mdi:clipboard-list', unit_of_measurement: 'Tickets',
     in_arbeit: runner.current ? `#${runner.current.id}` : null, naechster_lauf: L.nextRun(opts.run_times, new Date()),
     letzter_lauf: last ? last.at : null, letzter_lauf_ergebnis: last ? (last.note || `${last.tickets.length} Ticket(s)`) : null,
-    angemeldet: runner.loggedIn(),
+    angemeldet: runner.loggedIn(), schritt: runner.current ? runner.current.step : null,
+    kontingent_prozent: store.data.quota && store.data.quota.utilization != null ? Math.round(store.data.quota.utilization * 100) : null,
+    kontingent_fenster: store.data.quota ? store.data.quota.window : null,
   });
 }
 runner.onChange = () => { publish().catch(() => {}); };
@@ -80,10 +86,61 @@ async function intake() {
   if (items.length) publish().catch(() => {});
 }
 
+// ---- events: buttons in push notifications, tickets from automations -------
+let userNames = {};
+async function userName(id) {
+  if (!id) return 'Handy';
+  if (!userNames[id]) {
+    try { for (const u of await ha.ws('config/auth/list')) userNames[u.id] = u.name; } catch { /* not allowed */ }
+  }
+  return userNames[id] || 'Handy';
+}
+
+async function onEvent(ev) {
+  if (ev.event_type === 'mobile_app_notification_action') {
+    const a = L.parseNotifyAction(ev.data && ev.data.action);
+    if (!a) return;
+    const by = await userName(ev.context && ev.context.user_id);
+    const t = store.get(a.id);
+    try {
+      const text = ev.data.reply_text;
+      const to = L.applyAction(t, a.key, text);
+      if (text && String(text).trim()) t.comments.push({ at: store.now(), by, text: String(text).trim() });
+      if (a.key === 'sofort' && t.state !== 'umsetzen') t.direct = t.state !== 'entwurf';
+      else if (a.key === 'umsetzen') t.direct = false;
+      store.move(t, to, by, `${L.ACTIONS[a.key].label} (Benachrichtigung)`);
+      if (L.ACTIONS[a.key].immediate) runner.kick([t.id], by);
+      console.log(`[hausmeister] #${t.id}: ${a.key} über die Benachrichtigung von ${by}`);
+    } catch (e) {
+      await ha.notify(`Hausmeister #${t.id}`, `Nicht ausgeführt: ${e.message}`, { service: opts.notify_service, id: `hausmeister_${t.id}` });
+    }
+    publish().catch(() => {});
+  } else if (ev.event_type === 'hausmeister_neues_ticket') {
+    const d = ev.data || {};
+    const mode = d.modus || d.mode || (opts.auto_draft ? 'entwurf' : 'sammeln');
+    const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[mode];
+    if (!state) { console.error(`[hausmeister] hausmeister_neues_ticket: unbekannter Modus ${mode}`); return; }
+    const t = store.create({ title: d.titel || d.title, text: d.text || '', by: d.von || 'Automation', source: 'event', state, direct: mode === 'sofort' });
+    if (mode === 'sofort') runner.kick([t.id], 'Automation');
+    console.log(`[hausmeister] Ticket #${t.id} aus einem Ereignis: ${t.title}`);
+    publish().catch(() => {});
+  }
+}
+
 // ---- schedule --------------------------------------------------------------
+function maybeInspection(key) {
+  const [day, time] = key.split(' ');
+  if (opts.inspection_day === 'aus' || time !== opts.run_times[0]) return;
+  if (WEEKDAYS[new Date().getDay()] !== opts.inspection_day && opts.inspection_day !== 'taeglich') return;
+  if (store.data.tickets.some((t) => t.kind === 'rundgang' && t.created.slice(0, 10) === day)) return;
+  const t = store.create({ title: `Rundgang vom ${day}`, text: 'Regelmäßiger Rundgang: nur lesen, Probleme finden, Tickets vorschlagen.', by: 'Zeitplan', source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
+  console.log(`[hausmeister] Rundgang #${t.id} angelegt`);
+}
+
 async function tick() {
   for (const key of L.dueTimes(opts.run_times, new Date(), fired)) {
     fired.add(key);
+    maybeInspection(key);
     console.log(`[hausmeister] Geplanter Lauf ${key}`);
     runner.cycle(`Zeitplan ${key.split(' ')[1]}`).then(() => publish()).catch((e) => console.error(e));
   }
@@ -143,7 +200,8 @@ async function route(req, res) {
     if (req.method === 'GET' && p === '/api/state') {
       return send(res, 200, {
         tickets: store.data.tickets.map((t) => view(t, false)).sort((a, b) => b.updated.localeCompare(a.updated)),
-        runs: store.data.runs.slice(0, 30), busy: runner.busy, current: runner.current, logged_in: runner.loggedIn(),
+        runs: store.data.runs.slice(0, 30), busy: runner.busy, current: runner.current && { ...runner.current, steps: runner.current.steps.slice(-15) }, logged_in: runner.loggedIn(),
+        quota: store.data.quota || null, max_quota_percent: opts.max_quota_percent, quota_blocked: runner.quotaBlocked(), watchdog: store.data.watchdog || null,
         next_run: L.nextRun(opts.run_times, new Date()), options: { run_times: opts.run_times, auto_draft: opts.auto_draft, intake_todo: opts.intake_todo },
         states: L.STATES,
       });
@@ -219,10 +277,12 @@ server.on('upgrade', (req, sock, head) => {
 
 async function main() {
   await git.init();
+  try { const self = await ha.sup('GET', '/addons/self/info'); opts.panel_url = `/${self.slug}`; } catch { /* outside the Supervisor */ }
   server.listen(PORT, () => console.log(`[hausmeister] Board auf Port ${PORT}, Läufe um ${opts.run_times.join(', ')}`));
   await ha.waitForCore();
   await publish().catch(() => {});
   await runner.backup('Start');
+  ha.subscribe(['mobile_app_notification_action', 'hausmeister_neues_ticket'], (ev) => { onEvent(ev).catch((e) => console.error('[hausmeister] Ereignis:', e.message)); });
   setInterval(() => { tick().catch((e) => console.error(e)); }, 30000);
   setInterval(() => { intake().catch((e) => console.error(e)); }, 60000);
   setInterval(() => { publish().catch(() => {}); }, 15 * 60000);
@@ -231,4 +291,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { route, store, runner, opts };
+module.exports = { route, store, runner, opts, onEvent, maybeInspection };

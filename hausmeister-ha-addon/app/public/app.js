@@ -50,9 +50,12 @@ function badge(t) { return `<span class="badge ${TONE[t.state] || ''}">${esc(t.s
 
 function renderStatus() {
   const s = state;
-  const cur = s.current ? `läuft gerade: #${s.current.id} (${s.current.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'})` : '';
+  const cur = s.current ? `läuft gerade: #${s.current.id} (${s.current.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'}): ${s.current.step || ''}` : '';
+  const q = s.quota && s.quota.utilization != null ? Math.round(s.quota.utilization * 100) : null;
+  const qText = q == null ? '' : `<span class="badge ${s.quota_blocked ? 'bad' : q >= 60 ? 'warn' : ''}" title="Auslastung des Abos laut Claude Code (${esc(s.quota.window)}), Grenze für geplante Läufe ${s.max_quota_percent} %${s.quota.resetsAt ? `, erneuert ${new Date(s.quota.resetsAt * 1000).toLocaleString('de-DE')}` : ''}">Kontingent ${q} %${s.quota_blocked ? ', geplante Läufe pausiert' : ''}</span>`;
   $('#status').innerHTML = [
     s.logged_in ? '<span class="badge ok">Claude angemeldet</span>' : '<span class="badge bad">Claude nicht angemeldet</span>',
+    qText,
     `<span>Nächster Lauf: ${esc(s.next_run)}</span>`,
     cur ? `<span class="badge warn">${esc(cur)}</span>` : '',
     `<button id="runnow" ${s.busy ? 'disabled' : ''}>Jetzt ausführen</button>`,
@@ -63,7 +66,9 @@ function renderStatus() {
 }
 
 function renderList() {
-  const html = GROUPS.map((g) => {
+  const wd = state.watchdog && (Date.now() - new Date(state.watchdog.at).getTime()) < 3 * 86400000
+    ? `<div class="box alarm"><strong>Wächter ${fmt(state.watchdog.at)}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">Nicht durch den Hausmeister verursacht. Prüfen, ob es gewollt war.</span></div>` : '';
+  const html = wd + GROUPS.map((g) => {
     const items = state.tickets.filter((t) => g.states.includes(t.state));
     if (!items.length) return '';
     const cards = items.map((t) => `<div class="card" data-id="${t.id}"><div class="t">#${t.id} ${esc(t.title)}</div><div class="s">${badge(t)} ${fmt(t.updated)}${t.summary ? ` · ${esc(t.summary)}` : ''}</div></div>`).join('');
@@ -84,6 +89,9 @@ function resultBox(r) {
     ${r.changed && r.changed.length ? `<p class="meta">Geänderte Dateien laut Sicherung: ${esc(r.changed.join(', '))}</p>` : ''}
     ${r.api && r.api.length ? `<p class="meta">Über die API geändert: ${esc(r.api.join(', '))}</p>` : ''}
     ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
+    ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
+    ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
+    ${r.steps && r.steps.length ? `<details><summary>Schritte (${r.steps.length})</summary><ol class="meta">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
     ${r.message ? `<p class="meta">Meldung: ${esc(r.message)}</p>` : ''}
     ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}</div>`;
 }
@@ -97,6 +105,7 @@ async function openTicket(id) {
   $('#detail').innerHTML = `<button class="back">← Zur Liste</button>
     <h2>#${t.id} ${esc(t.title)}</h2><div>${badge(t)} <span class="meta">angelegt ${fmt(t.created)} von ${esc(t.created_by)}</span></div>
     ${t.text ? `<div class="box md">${md(t.text)}</div>` : ''}
+    ${state.current && state.current.id === t.id ? `<div class="box"><strong>Claude arbeitet gerade:</strong> ${esc(state.current.step || '')}<ol class="meta">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol></div>` : ''}
     <div class="actions">${t.actions.map((a) => `<button data-a="${a.key}" class="${a.key === 'umsetzen' || a.key === 'abnehmen' || a.key === 'sofort' ? 'primary' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
       ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
     <label>${needs ? 'Kommentar (für Antwort und Nachbessern nötig)' : 'Kommentar'}<textarea id="comment" rows="3"></textarea></label>
@@ -107,6 +116,7 @@ async function openTicket(id) {
   $('#list').hidden = true;
   $('#detail').hidden = false;
   $('#detail .back').onclick = closeTicket;
+  document.querySelectorAll('#detail [data-open]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); openTicket(Number(a.dataset.open)); }; });
   document.querySelectorAll('#detail [data-a]').forEach((b) => {
     b.onclick = async () => {
       const a = b.dataset.a;
@@ -178,4 +188,10 @@ $('#newform').onsubmit = async (e) => {
 };
 
 load().catch((e) => { $('#list').textContent = e.message; });
-setInterval(() => { if (!document.hidden) load().then(() => { if (openId && !$('#detail').hidden && !document.activeElement.matches('textarea')) openTicket(openId); }).catch(() => {}); }, 15000);
+// Refresh: every 4 s while Claude works (live steps), otherwise every 15 s.
+function refresh() {
+  const next = () => setTimeout(refresh, state && state.busy ? 4000 : 15000);
+  if (document.hidden) { next(); return; }
+  load().then(() => { if (openId && !$('#detail').hidden && !document.activeElement.matches('textarea')) return openTicket(openId); return null; }).catch(() => {}).finally(next);
+}
+setTimeout(refresh, 4000);

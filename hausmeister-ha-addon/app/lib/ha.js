@@ -57,6 +57,27 @@ function ws(type, payload = {}, { timeoutMs = 60000 } = {}) {
   });
 }
 
+// Long-lived event subscription with reconnect (core restarts, network).
+function subscribe(eventTypes, onEvent) {
+  let stopped = false;
+  let sock = null;
+  const connect = () => {
+    if (stopped) return;
+    let id = 0;
+    sock = new WebSocket(CORE_WS);
+    sock.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'auth_required') sock.send(JSON.stringify({ type: 'auth', access_token: token() }));
+      else if (m.type === 'auth_ok') for (const t of eventTypes) sock.send(JSON.stringify({ id: ++id, type: 'subscribe_events', event_type: t }));
+      else if (m.type === 'event' && m.event) { try { onEvent(m.event); } catch (e) { console.error('[hausmeister] Ereignis:', e.message); } }
+    };
+    sock.onclose = () => { if (!stopped) setTimeout(connect, 10000); };
+    sock.onerror = () => { try { sock.close(); } catch { /* reconnect via onclose */ } };
+  };
+  connect();
+  return () => { stopped = true; try { sock.close(); } catch { /* ignore */ } };
+}
+
 async function coreReachable() {
   try { await core('GET', '/', undefined, { timeoutMs: 5000 }); return true; } catch { return false; }
 }
@@ -79,13 +100,17 @@ async function checkConfig() {
   return core('POST', '/config/core/check_config');
 }
 
-async function notify(title, message, { service, id } = {}) {
+// Persistent notification plus optional push; actions become buttons in the mobile app.
+async function notify(title, message, { service, id, actions, url } = {}) {
   try {
     await core('POST', '/services/persistent_notification/create', { title, message, notification_id: id || 'hausmeister' });
   } catch (e) { console.error('[hausmeister] Benachrichtigung fehlgeschlagen:', e.message); }
   if (service) {
     const [domain, name] = service.split('.');
-    try { await core('POST', `/services/${domain}/${name}`, { title, message }); } catch (e) { console.error(`[hausmeister] ${service} fehlgeschlagen:`, e.message); }
+    const data = { tag: id || 'hausmeister', group: 'hausmeister' };
+    if (url) Object.assign(data, { url, clickAction: url });
+    if (actions && actions.length) data.actions = actions;
+    try { await core('POST', `/services/${domain}/${name}`, { title, message, data }); } catch (e) { console.error(`[hausmeister] ${service} fehlgeschlagen:`, e.message); }
   }
 }
 
@@ -93,4 +118,4 @@ async function setSensor(entityId, state, attributes) {
   try { await core('POST', `/states/${entityId}`, { state, attributes }); } catch (e) { console.error(`[hausmeister] ${entityId}:`, e.message); }
 }
 
-module.exports = { core, sup, ws, states, checkConfig, notify, setSensor, waitForCore, coreReachable };
+module.exports = { core, sup, ws, subscribe, states, checkConfig, notify, setSensor, waitForCore, coreReachable };

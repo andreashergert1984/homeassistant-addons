@@ -20,6 +20,12 @@ configuration:
   notify_service:
     name: Benachrichtigungsdienst
     description: "Optional, z. B. notify.mobile_app_handy. Meldet Entwürfe, Rückfragen, Umsetzungen und Wächter-Alarme."
+  max_quota_percent:
+    name: Kontingentgrenze (%)
+    description: Ab dieser Auslastung des Abos (höchstes Fenster laut Claude Code) fallen geplante Läufe aus, bis das Fenster erneuert ist. Sofort-Tickets laufen trotzdem. 0 schaltet die Grenze aus.
+  inspection_day:
+    name: Rundgang
+    description: An diesem Tag sucht Claude beim ersten Lauf nur lesend nach Problemen und legt bis zu fünf Vorschläge als neue Tickets an. aus, taeglich oder ein Wochentag.
   model:
     name: Modell
     description: Optional, z. B. sonnet oder opus. Leer bedeutet die Vorgabe von Claude Code.

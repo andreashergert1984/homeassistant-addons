@@ -64,6 +64,49 @@ Runs start at the configured times. Without queued tickets Claude is not started
 Rules are a strong guideline for the model, not a sandbox. The add-on has write access to your
 configuration and the `manager` role on the Supervisor. Approve only drafts you understand.
 
+## Notifications with buttons
+
+With `notify_service` set to a mobile app (for example `notify.mobile_app_phone`), each
+notification carries buttons: for a draft "Jetzt umsetzen", "Beim nächsten Lauf" and
+"Verwerfen", for a question "Antworten" (with a text field), after an implementation "Passt" and
+"Nachbessern" (with a text field), after an error "Erneut versuchen". Tapping the notification
+opens the board.
+
+## Usage quota
+
+Claude Code reports how much of the subscription is used. The board shows the highest window
+(five hours or seven days). Above `max_quota_percent` (default 80) scheduled runs are skipped until
+that window resets, so the subscription stays available for other work. Immediate tickets still run.
+
+## Watches between runs
+
+On every scheduled run the add-on also compares the configuration and the entities with the
+previous run, independent of tickets: YAML and dashboard files that shrank by more than 30 % or
+disappeared, and ten or more vanished entities, raise a notification and a banner on the board.
+After an implementation, new errors in the Home Assistant log are listed in the report.
+
+## Inspection
+
+With `inspection_day` set (a weekday or `taeglich`), the first run of that day starts a read-only
+inspection: repairs, entities unavailable for more than a day, automations with errors, log
+warnings, the configuration check and weak batteries. Up to five proposals become new tickets
+in "Neu"; nothing is changed.
+
+## Tickets from automations
+
+Fire the event `hausmeister_neues_ticket` with `titel`, optional `text`, optional `modus`
+(`entwurf`, `sofort`, `sammeln`) and optional `von`:
+
+```yaml
+action: event.fire
+data:
+  event_type: hausmeister_neues_ticket
+  event_data:
+    titel: Luftfeuchte im Keller seit drei Tagen über 70 %
+    text: Bitte prüfen, ob der Entfeuchter läuft und eine Warnung einrichten.
+    modus: entwurf
+```
+
 ## Where things are
 
 - Tickets: `/share/hausmeister/tickets/` (one Markdown file per ticket), state in the add-on data.
@@ -89,3 +132,5 @@ The sensors are recreated by the add-on after a restart of Home Assistant (withi
 | `intake_todo` | todo.hausmeister | Todo list for new tickets, empty turns it off. |
 | `notify_service` | | e.g. `notify.mobile_app_phone`. |
 | `model` | | e.g. `sonnet`, empty uses the default. |
+| `max_quota_percent` | 80 | Scheduled runs pause above this subscription usage, 0 turns it off. |
+| `inspection_day` | aus | `aus`, `taeglich` or a weekday (`mo` … `so`). |

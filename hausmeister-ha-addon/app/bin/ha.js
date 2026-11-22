@@ -13,7 +13,7 @@ const READ_WS = [
   /^history\/history_during_period$/, /^logbook\/get_events$/,
   /^recorder\/(statistics_during_period|list_statistic_ids|get_statistics_metadata)$/, /^energy\/get_prefs$/,
   /^manifest\/(list|get)$/, /^config_entries\/get$/, /^auth\/current_user$/, /^todo\/item\/list$/,
-  /^config\/(entity|device)_registry\/get$/, /^system_health\/info$/,
+  /^config\/(entity|device)_registry\/get$/, /^system_health\/info$/, /^repairs\/list_issues$/, /^trace\/get$/,
 ];
 
 function usage() {
