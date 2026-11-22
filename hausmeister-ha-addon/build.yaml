@@ -1,4 +1,0 @@
----
-build_from:
-  amd64: node:22-trixie-slim
-  aarch64: node:22-trixie-slim

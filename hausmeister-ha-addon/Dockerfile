@@ -1,5 +1,5 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+# Base image is set here (build.yaml is deprecated); multi-arch, the Supervisor picks the platform.
+FROM docker.io/library/node:22-trixie-slim
 
 LABEL \
     io.hass.name="Hausmeister" \
