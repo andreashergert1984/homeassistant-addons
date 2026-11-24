@@ -102,7 +102,8 @@ Beim nächsten Lauf schreibt Claude einen Entwurf, du bekommst eine Meldung.
 **Nach der Umsetzung:** „Abnehmen, passt“, „Nachbessern“ mit Kommentar oder „Zurückrollen“.
 
 **Sofort umsetzen von unterwegs:** einen Eintrag mit `sofort:`, `now:` oder `!` beginnen, zum Beispiel
-„sofort: Weihnachtsbeleuchtung ab 17 Uhr einschalten“.
+„sofort: Weihnachtsbeleuchtung ab 17 Uhr einschalten“ (braucht die Option `allow_immediate_from_outside`,
+sonst bekommt der Eintrag zuerst einen Entwurf).
 
 **Ticket aus einer Automation:**
 
@@ -139,6 +140,7 @@ kommen nicht wieder.
 | `max_backup_gb` | 2 | keine HA-Sicherung vor einer Änderung, wenn der Konfigurationsordner größer ist; die Git-Sicherung läuft trotzdem |
 | `inspection_day` | off | Rundgang: `off`, `daily` oder `mon` … `sun` (die deutschen Werte `aus`, `taeglich`, `mo` … `so` gelten weiter) |
 | `language` | auto | Sprache: `auto` folgt Home Assistant (Deutsch oder Englisch, sonst Englisch), `de` oder `en` legt sie fest |
+| `allow_immediate_from_outside` | aus | `sofort:`/`now:`/`!` in der To-do-Liste und `modus: sofort` im Ereignis setzen sofort um; aus = erst ein Entwurf |
 
 ## Sicherheit, ehrlich gesagt
 
@@ -148,7 +150,13 @@ kommen nicht wieder.
 - In der Umsetzung hat das Add-on Schreibzugriff auf die Konfiguration und die Supervisor-Rolle `manager`.
   Die Regeln sind eine starke Vorgabe für das Modell, aber keine Sandbox. **Gib nur Entwürfe frei, die du
   verstehst.** Für „Sofort umsetzen“ gilt das erst recht.
-- Board und Terminal sind nur für Home-Assistant-Admins sichtbar.
+- Board und Terminal sind nur für Home-Assistant-Admins sichtbar und antworten nur dem Ingress von Home Assistant.
+- Claude bekommt nie das Supervisor-Token: seine Helfer laufen über einen lokalen Proxy, der im Entwurf nur liest
+  und nie an die Supervisor-API, `hassio.*`, `shell_command.*`, Benutzer oder Tokens kommt. `secrets.yaml`,
+  Anmeldedateien, das Add-on selbst und `curl`/`wget` sind gesperrt; Webseiten nur aus der HA-Doku und von GitHub.
+- Von außerhalb des Boards (To-do-Liste, Ereignisse, Knöpfe in Meldungen) zählen nur aktive Admins, höchstens
+  10 neue Tickets je Stunde, und Sofort-Umsetzung braucht `allow_immediate_from_outside`.
+- In der Umsetzung hat Claude weiterhin eine Shell als Add-on-Benutzer, das ist also keine Sandbox.
 - Sicherungen: eigener Git-Verlauf der Konfiguration (ohne Datenbanken, Logs, Anmeldedaten, Modellordner und
   Dateien über 20 MB) und, wenn eingeschaltet, eine HA-Teilsicherung vor jeder Umsetzung.
 

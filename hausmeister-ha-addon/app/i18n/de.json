@@ -373,5 +373,14 @@
  "new.mode_collect": "Nur sammeln",
  "new.mode_collect_hint": "Kommt auf die Liste, es passiert noch nichts.",
  "new.submit": "Ticket anlegen",
- "new.hint": "Tickets gehen auch über die To-do-Liste „Hausmeister“, per Sprache oder aus Automationen. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt. Ohne Sofort-Modus wird nichts ohne deine Freigabe geändert."
+ "new.hint": "Tickets gehen auch über die To-do-Liste „Hausmeister“, per Sprache oder aus Automationen. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt. Ohne Sofort-Modus wird nichts ohne deine Freigabe geändert.",
+ "err.forbidden": "Nur über Home Assistant erreichbar (Ingress)",
+ "err.edit_draft": "Zu diesem Text gibt es einen Entwurf, deshalb lässt sich das Ticket nicht bearbeiten. Schreib einen Kommentar und wähle „Claude soll entwerfen“, oder verwirf das Ticket und leg ein neues an.",
+ "err.proxy_no_supervisor": "Die Supervisor-API steht Claude nicht zur Verfügung",
+ "intake.immediate_ignored": "Sofort-Umsetzung von außerhalb des Boards gewünscht. Das ist ausgeschaltet (Option allow_immediate_from_outside), deshalb bekommt dieses Ticket zuerst einen Entwurf.",
+ "rate.title": "Hausmeister: zu viele neue Tickets",
+ "rate.text": "Innerhalb einer Stunde kamen mehr als {max} neue Tickets aus der To-do-Liste oder aus Ereignissen. Weitere werden verworfen, bis die Stunde um ist. Bitte prüf deine Automationen.",
+ "cli.cfg_git_only": "cfg-git: nur {list}",
+ "cli.cfg_git_refused": "cfg-git: Argument nicht erlaubt: {arg}",
+ "cli.path_not_allowed": "Pfad nicht erlaubt: {path}"
 }

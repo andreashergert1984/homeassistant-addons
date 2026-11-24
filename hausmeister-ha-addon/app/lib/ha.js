@@ -1,17 +1,31 @@
 'use strict';
 // Access to Home Assistant Core and the Supervisor from inside the add-on.
-// Uses the SUPERVISOR_TOKEN that the Supervisor injects (homeassistant_api / hassio_api).
+// The server uses the SUPERVISOR_TOKEN that the Supervisor injects (homeassistant_api / hassio_api).
+// The helpers for Claude (ha-read, ha-api) never see that token: they get HM_PROXY_URL and a
+// one-time HM_PROXY_TOKEN and talk to the local proxy of the server (lib/proxy.js).
 
 const i18n = require('./i18n');
 
 const CORE = process.env.HA_CORE_URL || 'http://supervisor/core/api';
 const CORE_WS = process.env.HA_CORE_WS || 'ws://supervisor/core/websocket';
 const SUP = process.env.HA_SUPERVISOR_URL || 'http://supervisor';
+const PROXY = process.env.HM_PROXY_URL || '';
 
 function token() {
-  const t = process.env.SUPERVISOR_TOKEN;
+  const t = PROXY ? process.env.HM_PROXY_TOKEN : process.env.SUPERVISOR_TOKEN;
   if (!t) throw new Error(i18n.t('err.no_token'));
   return t;
+}
+
+// Plain forwarding for the proxy: status and body as they are.
+async function raw(base, method, path, bodyText, { timeoutMs = 60000 } = {}) {
+  const res = await fetch(base + path, {
+    method,
+    headers: { Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN || ''}`, 'Content-Type': 'application/json' },
+    body: bodyText === undefined || bodyText === '' || method === 'GET' || method === 'HEAD' ? undefined : bodyText,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: res.status, text: await res.text(), type: res.headers.get('content-type') || 'application/json' };
 }
 
 async function request(base, method, path, body, { text = false, timeoutMs = 60000 } = {}) {
@@ -28,9 +42,10 @@ async function request(base, method, path, body, { text = false, timeoutMs = 600
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
-const core = (method, path, body, opts) => request(CORE, method, path, body, opts);
+const core = (method, path, body, opts) => request(PROXY ? `${PROXY}/core/api` : CORE, method, path, body, opts);
 
 async function sup(method, path, body, opts) {
+  if (PROXY) throw new Error(i18n.t('err.proxy_no_supervisor'));
   const r = await request(SUP, method, path, body, opts);
   if (r && typeof r === 'object' && 'result' in r) {
     if (r.result !== 'ok') throw new Error(`Supervisor ${path}: ${r.message || r.result}`);
@@ -41,6 +56,7 @@ async function sup(method, path, body, opts) {
 
 // One WebSocket command per connection: simple and robust against core restarts.
 function ws(type, payload = {}, { timeoutMs = 60000 } = {}) {
+  if (PROXY) return request(PROXY, 'POST', '/ws', { type, payload }, { timeoutMs });
   return new Promise((resolve, reject) => {
     const sock = new WebSocket(CORE_WS);
     const timer = setTimeout(() => { try { sock.close(); } catch { /* ignore */ } reject(new Error(i18n.t('err.ws_timeout', { type }))); }, timeoutMs);
@@ -50,7 +66,7 @@ function ws(type, payload = {}, { timeoutMs = 60000 } = {}) {
       const m = JSON.parse(ev.data);
       if (m.type === 'auth_required') sock.send(JSON.stringify({ type: 'auth', access_token: token() }));
       else if (m.type === 'auth_invalid') done(reject, new Error(i18n.t('err.ws_auth')));
-      else if (m.type === 'auth_ok') sock.send(JSON.stringify({ id: 1, type, ...payload }));
+      else if (m.type === 'auth_ok') sock.send(JSON.stringify({ ...payload, id: 1, type }));
       else if (m.id === 1 && m.type === 'result') {
         if (m.success) done(resolve, m.result);
         else done(reject, new Error(`WS ${type}: ${m.error && (m.error.message || m.error.code)}`));
@@ -78,6 +94,11 @@ function subscribe(eventTypes, onEvent) {
   };
   connect();
   return () => { stopped = true; try { sock.close(); } catch { /* ignore */ } };
+}
+
+// Log of Home Assistant Core (Supervisor), through the proxy for the helpers.
+function coreLog() {
+  return PROXY ? request(PROXY, 'GET', '/hm/log', undefined, { text: true }) : sup('GET', '/core/logs', undefined, { text: true });
 }
 
 async function coreReachable() {
@@ -120,4 +141,4 @@ async function setSensor(entityId, state, attributes) {
   try { await core('POST', `/states/${entityId}`, { state, attributes }); } catch (e) { console.error(`[hausmeister] ${entityId}:`, e.message); }
 }
 
-module.exports = { core, sup, ws, subscribe, states, checkConfig, notify, setSensor, waitForCore, coreReachable };
+module.exports = { core, sup, ws, raw, coreLog, CORE, SUP, subscribe, states, checkConfig, notify, setSensor, waitForCore, coreReachable };

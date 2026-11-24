@@ -2,6 +2,7 @@
 // One run: backup snapshot, then the queued tickets one after another.
 
 const { spawn, execFile } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const ha = require('./ha');
@@ -13,12 +14,30 @@ const tr = i18n.t;
 const { ACTOR, REASON } = L;
 
 const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
-const SHARE = process.env.HM_SHARE_DIR || '/share/hausmeister';
 const CLAUDE = process.env.HM_CLAUDE_BIN || 'claude';
+const WISSEN = process.env.HM_WISSEN || '/data/wissen.md';
+const HOME = process.env.HM_HOME_DIR || '/data/home';
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)',
-  'Bash(echo:*)', 'Bash(printf:*)', 'Bash(cat:*)', 'Bash(sort:*)', 'Bash(uniq:*)', 'Bash(cut:*)', 'Bash(tr:*)', 'Bash(date:*)'];
-const WRITE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash'];
+// Permission rules of Claude Code 2.1.x: "//" starts an absolute path, "Bash(x:*)" a command prefix.
+const WEB = ['home-assistant.io', 'www.home-assistant.io', 'github.com', 'raw.githubusercontent.com', 'community.home-assistant.io'].map((d) => `WebFetch(domain:${d})`);
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)',
+  'Bash(echo:*)', 'Bash(printf:*)', 'Bash(cut:*)', 'Bash(tr:*)', 'Bash(date:*)'];
+const WRITE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash', `Edit(/${WISSEN})`];
+// Closed in every phase: secrets, the login of Claude, the snapshots, the add-on itself, /proc
+// (environment of other processes) and network tools in the shell.
+function denyRules(work = git.WORK) {
+  const abs = (p) => `/${path.resolve(p)}`;
+  const files = [`${abs(work)}/secrets.yaml`, `${abs(work)}/**/secrets.yaml`, `${abs(work)}/.storage/auth*`, `${abs(work)}/.storage/core.config_entries`,
+    `${abs(HOME)}/.claude/**`, `${abs(git.GIT_DIR)}/**`, '//proc/**', '//app/**'];
+  return [...files.map((f) => `Read(${f})`), ...files.map((f) => `Edit(${f})`), 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(nc:*)'];
+}
+// Claude gets no Supervisor token; the helpers use the local proxy with a token per call.
+function childEnv(base, extra) {
+  const env = { ...base };
+  delete env.SUPERVISOR_TOKEN;
+  delete env.HASSIO_TOKEN;
+  return { ...env, ...extra };
+}
 
 const SCALE = Number(process.env.HM_TIME_SCALE || 1); // tests shorten the waits
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms * SCALE));
@@ -108,9 +127,9 @@ function folderSizeGb(dir) {
   });
 }
 
-function runClaude(args, timeoutMs, onSpawn, onLine) {
+function runClaude(args, timeoutMs, onSpawn, onLine, env = {}) {
   return new Promise((resolve) => {
-    const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: { ...process.env, CI: '1', HM_LANG: i18n.language() }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: childEnv(process.env, { CI: '1', HM_LANG: i18n.language(), HM_WISSEN: WISSEN, ...env }), stdio: ['ignore', 'pipe', 'pipe'] });
     if (onSpawn) onSpawn(child);
     let stdout = '';
     let stderr = '';
@@ -138,6 +157,8 @@ class Runner {
     this.current = null;
     this.child = null;
     this.pending = new Set();
+    this.pendingQuota = false;
+    this.proxy = null;
     this.baselineFile = process.env.HM_BASELINE || '/data/baseline.json';
   }
 
@@ -147,7 +168,7 @@ class Runner {
     const d = this.store.data;
     try {
       if (backup && d.last_backup && d.last_backup !== backup && !(d.last_impl && d.last_impl > d.last_backup_at)) {
-        const files = (await git.changedFiles(d.last_backup, backup)).map((f) => f.file);
+        const files = (await git.changedFiles(d.last_backup, backup)).map((f) => f.file).filter((f) => !L.neverVolatile(f));
         d.volatile = [...new Set([...(d.volatile || []), ...files])].slice(-500);
       }
     } catch { /* history rewritten or first run */ }
@@ -195,17 +216,21 @@ class Runner {
     try { return await git.snapshot(tr('backup.run', { reason: L.reasonLabel(reason) })); } catch (e) { console.error('[hausmeister] snapshot:', e.message); return null; }
   }
 
-  // Starts a run for these tickets right away, or right after the current run.
-  kick(ids, by) {
+  // Starts a run for these tickets right away, or right after the current run. checkQuota: the
+  // run respects the quota limit (todo list, events, notifications); the board does not.
+  kick(ids, by, { checkQuota = false } = {}) {
     for (const id of ids) this.pending.add(id);
+    if (checkQuota) this.pendingQuota = true;
     if (!this.busy) {
       const only = [...this.pending];
+      const quota = this.pendingQuota;
       this.pending.clear();
-      this.cycle(REASON.now, by, only).catch((e) => console.error(e));
+      this.pendingQuota = false;
+      this.cycle(REASON.now, by, only, { checkQuota: quota }).catch((e) => console.error(e));
     }
   }
 
-  async cycle(reason, by = ACTOR.schedule, only = null) {
+  async cycle(reason, by = ACTOR.schedule, only = null, { checkQuota = false } = {}) {
     if (this.busy) return { skipped: tr('run.busy') };
     this.busy = true;
     const run = { at: new Date().toISOString(), reason, by, tickets: [], note: '' };
@@ -217,7 +242,7 @@ class Runner {
       }
       const queue = L.pickQueue(this.store.data.tickets, this.opts.max_tickets_per_run, only);
       if (!queue.length) { run.note = tr('run.nothing'); return run; }
-      if (!only && by === ACTOR.schedule && this.quotaBlocked()) {
+      if (((!only && by === ACTOR.schedule) || checkQuota) && this.quotaBlocked()) {
         const q = this.store.data.quota;
         run.note = tr('run.quota_skip', { pct: Math.round(q.utilization * 100), max: this.opts.max_quota_percent, until: q.resetsAt ? new Date(q.resetsAt * 1000).toLocaleString(i18n.locale()) : tr('run.quota_reset') });
         return run;
@@ -241,6 +266,7 @@ class Runner {
       this.busy = false;
       this.current = null;
       this.store.addRun(run);
+      if (this.afterRun) { try { this.afterRun(run); } catch (e) { console.error('[hausmeister] after run:', e.message); } }
       if (this.onChange) this.onChange();
       if (this.pending.size) setImmediate(() => this.kick([], REASON.now));
     }
@@ -255,11 +281,11 @@ class Runner {
     let before = null;
     try {
       const args = ['-p', promptFor(t, phase, s), '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
-        '--add-dir', git.WORK, '--add-dir', SHARE];
+        '--add-dir', git.WORK];
       if (this.opts.model) args.push('--model', this.opts.model);
       if (t.session_id) args.push('--resume', t.session_id);
       if (phase === 'entwerfen') {
-        args.push('--permission-mode', 'default', '--allowedTools', ...READ_TOOLS, '--disallowedTools', 'Edit', 'Write', 'NotebookEdit');
+        args.push('--permission-mode', 'default', '--allowedTools', ...READ_TOOLS, '--disallowedTools', 'Edit', 'Write', 'NotebookEdit', ...denyRules());
       } else {
         const cur0 = this.current;
         const say = (text) => { cur0.step = text; cur0.steps.push({ at: new Date().toISOString(), text }); if (this.onChange) this.onChange(); };
@@ -285,7 +311,16 @@ class Runner {
           }
         }
         say(tr('step.claude_starts'));
-        args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WRITE_TOOLS);
+        args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WRITE_TOOLS, '--disallowedTools', ...denyRules());
+      }
+      // Write access to Home Assistant only while implementing a ticket (not in an inspection).
+      const mode = phase === 'umsetzen' && t.kind !== 'rundgang' ? 'write' : 'read';
+      const proxyEnv = {};
+      let proxyToken = null;
+      if (this.proxy) {
+        proxyEnv.HM_PROXY_URL = await this.proxy.ensure();
+        proxyToken = this.proxy.issue(mode);
+        proxyEnv.HM_PROXY_TOKEN = proxyToken;
       }
       const cur = this.current;
       const onLine = (m) => {
@@ -299,7 +334,10 @@ class Runner {
           }
         }
       };
-      const proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine);
+      let proc;
+      try {
+        proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine, proxyEnv);
+      } finally { if (proxyToken) this.proxy.revoke(proxyToken); }
       this.child = null;
       result.steps = cur.steps.slice(-80).map((x) => x.text);
       const r = proc.signal ? { kind: 'fehler', message: tr('run.timeout', { min: this.opts.run_timeout_minutes }) } : L.interpretResult(phase, proc.stdout || proc.stderr);
@@ -385,7 +423,10 @@ class Runner {
       fehler: () => tr('notify.error', { message: result.message || '' }),
     };
     if (!msgs[to]) return;
-    await ha.notify(tr('notify.ticket_title', { id: t.id, title: t.title }), `${msgs[to]()}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, actions: L.notifyActions(to, t.id), url: this.opts.panel_url });
+    // A new random nonce per notification; older buttons of this ticket stop working.
+    t.notify_nonce = crypto.randomBytes(8).toString('hex');
+    this.store.save();
+    await ha.notify(tr('notify.ticket_title', { id: t.id, title: t.title }), `${msgs[to]()}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, actions: L.notifyActions(to, t.id, t.notify_nonce), url: this.opts.panel_url });
   }
 
   async rollback(t, by) {
@@ -423,4 +464,4 @@ class Runner {
   }
 }
 
-module.exports = { Runner, promptFor, READ_TOOLS, WRITE_TOOLS, configFiles, interpret: L.interpretResult };
+module.exports = { Runner, promptFor, READ_TOOLS, WRITE_TOOLS, denyRules, childEnv, configFiles, interpret: L.interpretResult };

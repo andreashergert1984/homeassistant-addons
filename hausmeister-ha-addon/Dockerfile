@@ -29,7 +29,7 @@ RUN apt-get update \
 COPY app /app
 RUN printf '#!/bin/sh\nexec env HA_TOOL_MODE=read node /app/bin/ha.js "$@"\n' > /usr/local/bin/ha-read \
     && printf '#!/bin/sh\nexec env HA_TOOL_MODE=write node /app/bin/ha.js "$@"\n' > /usr/local/bin/ha-api \
-    && cp /app/bin/cfg-git /usr/local/bin/cfg-git \
+    && printf '#!/bin/sh\nexec node /app/bin/cfg-git.js "$@"\n' > /usr/local/bin/cfg-git \
     && chmod +x /usr/local/bin/ha-read /usr/local/bin/ha-api /usr/local/bin/cfg-git /app/run.sh
 
 ENV HOME=/data/home \

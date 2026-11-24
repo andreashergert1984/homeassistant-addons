@@ -1,3 +1,20 @@
+## 0.8.0
+
+Security hardening.
+
+- Board, API and terminal only answer the ingress of Home Assistant (and loopback). Other add-ons in the internal network get 403, terminal connections are closed.
+- Claude no longer gets the Supervisor token. `ha-read` and `ha-api` go through a local proxy in the add-on with a random token per Claude call: drafts and inspections only read (GET, a fixed list of WebSocket commands, template, configuration check, core log); implementations may write, but never reach the Supervisor API, `hassio.*`, `shell_command.*`, `homeassistant.stop`, `config/auth*`, `auth/*` or the events of the add-on. Paths with `..` or encoded dots are refused. `ha-api restart` now uses the service `homeassistant.restart`.
+- `ha-read ws` uses an exact allowlist; `config/auth/list` and `application_credentials/*` are no longer readable. A JSON payload can no longer replace the command type.
+- `cfg-git` is a Node script that checks every argument: only `log`, `diff`, `show`, `status`, `ls-files`, `blame`; no `--output` (also abbreviated), `-o`, `-O`, `-c`, `--ext-diff`, `--textconv`, `--exec-path`, `--git-dir`, `--work-tree`, `--config*`, `--no-index`, no paths to `secrets.yaml` or the auth files. Always `--no-ext-diff`/`--no-textconv`, no system or global git configuration.
+- Tools for Claude: `cat`, `sort` and `uniq` are gone from drafts (Read is enough); WebFetch only for home-assistant.io, community.home-assistant.io, github.com and raw.githubusercontent.com in every phase. Closed in every phase: `secrets.yaml`, `.storage/auth*`, `.storage/core.config_entries`, the login of Claude, the snapshot repository, `/proc`, `/app`, and `curl`, `wget`, `nc`.
+- New option `allow_immediate_from_outside` (default off): only then do `sofort:`, `now:` and `!` in the todo list and `modus: sofort` in `hausmeister_neues_ticket` implement right away. Otherwise the ticket gets a draft and a note.
+- Events (`hausmeister_neues_ticket`, notification buttons) only count from an active admin; events of the add-on's own user are ignored. Notification buttons carry a random nonce per notification that is stored at the ticket and used once; buttons of older notifications, including all from before 0.8.0, no longer work.
+- At most 10 new tickets per hour from the todo list and events; more are discarded with a log line and one notification. Immediate runs from the todo list, events and notification buttons respect the quota limit.
+- YAML files, dashboards, automations, scripts and scenes are never learned as files that change on their own, so a rollback always covers them.
+- A ticket with a draft can no longer be edited (the draft belongs to the text); comment and ask for a new draft instead.
+- Knowledge file: the main copy is now `/data/wissen.md`; `/share/hausmeister/WISSEN.md` is only an export and is overwritten. An existing file there is taken over once on the first start.
+- Claude's session transcripts (`home/.claude/projects`) are left out of HA backups.
+
 ## 0.7.0
 
 - German and English: the board, error messages, notifications with their buttons, ticket documents, sensor names, backup names and the helpers for Claude are available in both languages. Date and time follow the language.

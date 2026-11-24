@@ -35,3 +35,6 @@ configuration:
   language:
     name: Language
     description: Language of the board, the notifications and Claude's texts. auto follows the language of Home Assistant (German or English, otherwise English), de or en set it.
+  allow_immediate_from_outside:
+    name: Immediate implementation from outside the board
+    description: "Off: the prefixes sofort:, now: and ! in the todo list and mode sofort in the event hausmeister_neues_ticket only create a draft. On: they are implemented right away without a draft. The board itself is not affected."

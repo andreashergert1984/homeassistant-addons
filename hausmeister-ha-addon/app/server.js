@@ -3,6 +3,7 @@
 
 const http = require('http');
 const net = require('net');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const L = require('./lib/logic');
@@ -11,6 +12,8 @@ const ha = require('./lib/ha');
 const git = require('./lib/git');
 const { Store } = require('./lib/store');
 const { Runner } = require('./lib/runner');
+const { createProxy } = require('./lib/proxy');
+const policy = require('./lib/policy');
 
 const OPTIONS_FILE = process.env.HM_OPTIONS || '/data/options.json';
 const PORT = Number(process.env.HM_PORT || 8099);
@@ -19,6 +22,8 @@ const SHARE = process.env.HM_SHARE_DIR || '/share/hausmeister';
 const PUBLIC = path.join(__dirname, 'public');
 const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
 const HOME_DIR = process.env.HM_HOME_DIR || '/data/home';
+const WISSEN = process.env.HM_WISSEN || '/data/wissen.md';
+const MAX_INTAKE_PER_HOUR = 10;
 const tr = i18n.t;
 const { ACTOR, REASON } = L;
 
@@ -36,6 +41,7 @@ const opts = {
   max_backup_gb: raw.max_backup_gb === undefined ? 2 : Number(raw.max_backup_gb),
   inspection_day: raw.inspection_day || 'off',
   language: raw.language || 'auto',
+  allow_immediate_from_outside: raw.allow_immediate_from_outside === true,
   panel_url: '',
 };
 // Until Home Assistant answers, "auto" means English.
@@ -48,20 +54,34 @@ async function applyLanguage(getConfig = () => ha.core('GET', '/config')) {
   return i18n.language() !== before;
 }
 
+const writeFile = (f, text) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); } catch (e) { console.error(`[hausmeister] ${f}:`, e.message); } };
+
+// The knowledge file lives in the add-on data (/data/wissen.md); /share is writable by other
+// add-ons and Samba, so /share/hausmeister/WISSEN.md is only an export that gets overwritten.
+function exportWissen({ share = SHARE, wissen = WISSEN } = {}) {
+  try { if (fs.existsSync(wissen)) writeFile(path.join(share, 'WISSEN.md'), fs.readFileSync(wissen, 'utf8')); } catch (e) { console.error('[hausmeister] knowledge export:', e.message); }
+}
+
 // Files Claude and the terminal read, in the active language: rules (CLAUDE.md), the
 // greeting of the login terminal and, if missing, the knowledge file of the house.
-function writeRuntimeFiles({ work = WORK_DIR, home = HOME_DIR, share = SHARE } = {}) {
+function writeRuntimeFiles({ work = WORK_DIR, home = HOME_DIR, share = SHARE, wissen = WISSEN } = {}) {
   const lang = i18n.language();
-  const write = (f, text) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); } catch (e) { console.error(`[hausmeister] ${f}:`, e.message); } };
-  write(path.join(work, 'CLAUDE.md'), fs.readFileSync(path.join(__dirname, 'prompt', `regeln.${lang}.md`), 'utf8'));
-  write(path.join(home, '.bash_profile'), `cd ${work}\necho\necho ${JSON.stringify(tr('terminal.hello'))}\necho ${JSON.stringify(tr('terminal.helpers'))}\necho\n`);
-  const wissen = path.join(share, 'WISSEN.md');
-  if (!fs.existsSync(wissen)) write(wissen, `# ${tr('knowledge.title')}\n\n${tr('knowledge.text')}\n`);
+  writeFile(path.join(work, 'CLAUDE.md'), fs.readFileSync(path.join(__dirname, 'prompt', `regeln.${lang}.md`), 'utf8'));
+  writeFile(path.join(home, '.bash_profile'), `cd ${work}\necho\necho ${JSON.stringify(tr('terminal.hello'))}\necho ${JSON.stringify(tr('terminal.helpers'))}\necho\n`);
+  if (!fs.existsSync(wissen)) {
+    // Once: take over the file from before 0.8.0.
+    const old = path.join(share, 'WISSEN.md');
+    if (fs.existsSync(old)) { writeFile(wissen, fs.readFileSync(old, 'utf8')); console.log(`[hausmeister] knowledge taken over from ${old}`); } else writeFile(wissen, `# ${tr('knowledge.title')}\n\n${tr('knowledge.text')}\n`);
+  }
+  exportWissen({ share, wissen });
 }
 
 fs.mkdirSync(SHARE, { recursive: true });
 const store = new Store(process.env.HM_STATE || '/data/state.json', path.join(SHARE, 'tickets'));
 const runner = new Runner(store, opts);
+const proxy = createProxy();
+runner.proxy = proxy;
+runner.afterRun = () => exportWissen();
 const fired = new Set();
 
 // ---- sensors -------------------------------------------------------------
@@ -85,6 +105,32 @@ async function publish() {
 }
 runner.onChange = () => { publish().catch(() => {}); };
 
+// ---- limits for tickets from outside (todo list, events) ---------------------
+let intakeTimes = [];
+let rateNotified = false;
+function intakeAllowed(what) {
+  const r = policy.rateTake(intakeTimes, Date.now(), MAX_INTAKE_PER_HOUR);
+  intakeTimes = r.times;
+  if (r.ok) { rateNotified = false; return true; }
+  console.error(`[hausmeister] more than ${MAX_INTAKE_PER_HOUR} new tickets in one hour, discarded: ${what}`);
+  if (!rateNotified) {
+    rateNotified = true;
+    ha.notify(tr('rate.title'), tr('rate.text', { max: MAX_INTAKE_PER_HOUR }), { service: opts.notify_service, id: 'hausmeister_limit', url: opts.panel_url }).catch(() => {});
+  }
+  return false;
+}
+
+// Immediate implementation from outside (prefix in the todo list, mode "sofort" in an event)
+// only with the option; otherwise the ticket becomes a draft with a note.
+function outsideState(immediate, fallback) {
+  if (!immediate) return { state: fallback, direct: false, note: false };
+  if (opts.allow_immediate_from_outside) return { state: 'umsetzen', direct: true, note: false };
+  return { state: 'entwerfen', direct: false, note: true };
+}
+function noteImmediateIgnored(t) {
+  store.comment(t, ACTOR.caretaker, tr('intake.immediate_ignored'));
+}
+
 // ---- intake from the todo list ------------------------------------------
 let intakeWarned = false;
 async function intake() {
@@ -102,41 +148,75 @@ async function intake() {
   const now = [];
   for (const it of items.filter((i) => i.status === 'needs_action')) {
     const p = L.parseIntake(it.summary);
-    const t = store.create({ title: p.title, text: it.description || '', by: ACTOR.todo, source: 'todo', state: p.immediate ? 'umsetzen' : (opts.auto_draft ? 'entwerfen' : 'neu'), direct: p.immediate });
-    if (p.immediate) now.push(t.id);
-    try {
-      await ha.core('POST', '/services/todo/remove_item', { entity_id: opts.intake_todo, item: it.uid || it.summary });
-    } catch (e) { console.error(`[hausmeister] todo item not removed (#${t.id}):`, e.message); }
+    const remove = async (label) => {
+      try {
+        await ha.core('POST', '/services/todo/remove_item', { entity_id: opts.intake_todo, item: it.uid || it.summary });
+      } catch (e) { console.error(`[hausmeister] todo item not removed (${label}):`, e.message); }
+    };
+    if (!intakeAllowed(`todo "${p.title}"`)) { await remove('limit'); continue; }
+    const s = outsideState(p.immediate, opts.auto_draft ? 'entwerfen' : 'neu');
+    const t = store.create({ title: p.title, text: it.description || '', by: ACTOR.todo, source: 'todo', state: s.state, direct: s.direct });
+    if (s.note) noteImmediateIgnored(t);
+    if (s.direct) now.push(t.id);
+    await remove(`#${t.id}`);
     console.log(`[hausmeister] ticket #${t.id} from the todo list: ${t.title}`);
   }
-  if (now.length) runner.kick(now, ACTOR.todo);
+  if (now.length) runner.kick(now, ACTOR.todo, { checkQuota: true });
   if (items.length) publish().catch(() => {});
 }
 
 // ---- events: buttons in push notifications, tickets from automations -------
-let userNames = {};
-async function userName(id) {
-  if (!id) return ACTOR.phone;
-  if (!userNames[id]) {
-    try { for (const u of await ha.ws('config/auth/list')) userNames[u.id] = u.name; } catch { /* not allowed */ }
-  }
-  return userNames[id] || ACTOR.phone;
+// Users of Home Assistant (config/auth/list) and our own user, cached for a minute.
+const deps = {
+  listUsers: () => ha.ws('config/auth/list'),
+  currentUser: () => ha.ws('auth/current_user'),
+};
+let usersCache = { at: 0, list: null };
+async function users() {
+  if (usersCache.list && Date.now() - usersCache.at < 60000) return usersCache.list;
+  try { usersCache = { at: Date.now(), list: await deps.listUsers() }; } catch (e) { console.error('[hausmeister] users not readable:', e.message); return usersCache.list || []; }
+  return usersCache.list;
+}
+let ownId;
+async function ownUserId() {
+  if (ownId === undefined) { try { ownId = (await deps.currentUser()).id || null; } catch { return null; } }
+  return ownId;
+}
+function resetAuthCache() { usersCache = { at: 0, list: null }; ownId = undefined; }
+
+// Only events from an active admin count; events of our own user (Claude through the proxy) never.
+async function eventSender(ev) {
+  const uid = ev.context && ev.context.user_id;
+  if (uid && uid === await ownUserId()) return { ok: false, why: 'own user' };
+  const u = uid ? (await users()).find((x) => x.id === uid) : null;
+  if (!policy.isActiveAdmin(u)) return { ok: false, why: uid ? `user ${uid} is not an active admin` : 'no user in the context' };
+  return { ok: true, name: u.name || ACTOR.phone };
 }
 
 async function onEvent(ev) {
+  if (ev.event_type !== 'mobile_app_notification_action' && ev.event_type !== 'hausmeister_neues_ticket') return;
+  // Buttons of other apps and automations are none of our business.
+  if (ev.event_type === 'mobile_app_notification_action' && !/^HAUSMEISTER_/.test(String(ev.data && ev.data.action))) return;
+  const sender = await eventSender(ev);
+  if (!sender.ok) { console.error(`[hausmeister] ${ev.event_type} ignored: ${sender.why}`); return; }
   if (ev.event_type === 'mobile_app_notification_action') {
     const a = L.parseNotifyAction(ev.data && ev.data.action);
     if (!a) return;
-    const by = await userName(ev.context && ev.context.user_id);
-    const t = store.get(a.id);
+    const by = sender.name;
+    let t;
+    try { t = store.get(a.id); } catch { console.error(`[hausmeister] notification action for unknown ticket ${a.id}`); return; }
+    const good = a.nonce && t.notify_nonce && a.nonce.length === t.notify_nonce.length
+      && crypto.timingSafeEqual(Buffer.from(a.nonce), Buffer.from(t.notify_nonce));
+    if (!good) { console.error(`[hausmeister] #${t.id}: notification action ${a.key} ignored, ${a.nonce ? 'outdated' : 'without'} nonce`); return; }
     try {
       const text = ev.data.reply_text;
       const to = L.applyAction(t, a.key, text);
       if (text && String(text).trim()) t.comments.push({ at: store.now(), by, text: String(text).trim() });
       if (a.key === 'sofort' && t.state !== 'umsetzen') t.direct = t.state !== 'entwurf';
       else if (a.key === 'umsetzen') t.direct = false;
+      t.notify_nonce = null; // one button press per notification
       store.move(t, to, by, tr('history.via_notification', { action: L.actionLabel(a.key) }));
-      if (L.ACTIONS[a.key].immediate) runner.kick([t.id], by);
+      if (L.ACTIONS[a.key].immediate) runner.kick([t.id], by, { checkQuota: true });
       console.log(`[hausmeister] #${t.id}: ${a.key} from the notification of ${by}`);
     } catch (e) {
       await ha.notify(tr('notify.ticket_short', { id: t.id }), tr('notify.not_done', { message: e.message }), { service: opts.notify_service, id: `hausmeister_${t.id}` });
@@ -145,10 +225,13 @@ async function onEvent(ev) {
   } else if (ev.event_type === 'hausmeister_neues_ticket') {
     const d = ev.data || {};
     const mode = d.modus || d.mode || (opts.auto_draft ? 'entwurf' : 'sammeln');
-    const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[mode];
-    if (!state) { console.error(`[hausmeister] hausmeister_neues_ticket: unknown mode ${mode}`); return; }
-    const t = store.create({ title: d.titel || d.title, text: d.text || '', by: d.von || ACTOR.automation, source: 'event', state, direct: mode === 'sofort' });
-    if (mode === 'sofort') runner.kick([t.id], ACTOR.automation);
+    const base = { entwurf: 'entwerfen', sofort: 'entwerfen', sammeln: 'neu' }[mode];
+    if (!base) { console.error(`[hausmeister] hausmeister_neues_ticket: unknown mode ${mode}`); return; }
+    if (!intakeAllowed(`event "${d.titel || d.title}"`)) return;
+    const s = outsideState(mode === 'sofort', base);
+    const t = store.create({ title: d.titel || d.title, text: d.text || '', by: d.von || ACTOR.automation, source: 'event', state: s.state, direct: s.direct });
+    if (s.note) noteImmediateIgnored(t);
+    if (s.direct) runner.kick([t.id], ACTOR.automation, { checkQuota: true });
     console.log(`[hausmeister] ticket #${t.id} from an event: ${t.title}`);
     publish().catch(() => {});
   }
@@ -215,6 +298,12 @@ const STATIC = { '/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css' }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 async function route(req, res) {
+  // Only the ingress gateway of the Supervisor (and loopback); other add-ons in the
+  // internal network reach port 8099 as well.
+  if (!policy.ingressAllowed(req.socket && req.socket.remoteAddress)) {
+    console.error(`[hausmeister] request from ${req.socket && req.socket.remoteAddress} refused`);
+    return send(res, 403, { error: tr('err.forbidden') });
+  }
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   if (p.startsWith('/terminal')) return proxyTtyd(req, res);
@@ -259,7 +348,10 @@ async function route(req, res) {
         if (!String(b.text || '').trim()) throw new Error(tr('err.comment_empty'));
         store.comment(t, who(req), b.text);
       } else if (m[2] === 'edit') {
-        if (!['neu', 'entwurf', 'rueckfrage', 'fehler'].includes(t.state)) throw new Error(tr('err.edit_locked'));
+        // A draft belongs to the text it was made for; approving it after an edit would
+        // implement something else than what was written.
+        if (t.state === 'entwurf') throw new Error(tr('err.edit_draft'));
+        if (!['neu', 'rueckfrage', 'fehler'].includes(t.state)) throw new Error(tr('err.edit_locked'));
         if (b.title !== undefined) { if (!String(b.title).trim()) throw new Error(tr('err.title_missing')); t.title = String(b.title).trim().slice(0, 200); }
         if (b.text !== undefined) t.text = String(b.text);
         store.touch(t);
@@ -325,7 +417,12 @@ async function route(req, res) {
 const server = http.createServer((req, res) => { route(req, res).catch((e) => send(res, 500, { error: e.message })); });
 
 // WebSocket of the terminal (ttyd) through ingress.
-server.on('upgrade', (req, sock, head) => {
+function onUpgrade(req, sock, head) {
+  if (!policy.ingressAllowed(req.socket && req.socket.remoteAddress)) {
+    console.error(`[hausmeister] terminal connection from ${req.socket && req.socket.remoteAddress} refused`);
+    sock.destroy();
+    return;
+  }
   if (!req.url.startsWith('/terminal')) { sock.destroy(); return; }
   const up = net.connect(TTYD_PORT, '127.0.0.1', () => {
     const h = [];
@@ -337,10 +434,12 @@ server.on('upgrade', (req, sock, head) => {
   });
   up.on('error', () => sock.destroy());
   sock.on('error', () => up.destroy());
-});
+}
+server.on('upgrade', onUpgrade);
 
 async function main() {
   await git.init();
+  await proxy.ensure();
   try { const self = await ha.sup('GET', '/addons/self/info'); opts.panel_url = `/${self.slug}`; } catch { /* outside the Supervisor */ }
   server.listen(PORT, () => console.log(`[hausmeister] board on port ${PORT}, runs at ${opts.run_times.join(', ')}`));
   await ha.waitForCore();
@@ -362,4 +461,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { route, store, runner, opts, onEvent, maybeInspection, applyLanguage, writeRuntimeFiles };
+module.exports = { route, onUpgrade, store, runner, proxy, opts, onEvent, deps, resetAuthCache, intake, maybeInspection, applyLanguage, writeRuntimeFiles, exportWissen };

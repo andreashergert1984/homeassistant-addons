@@ -41,8 +41,9 @@ already stored (old reports, comments, history notes) stay in the language they 
 
 **Implement now** skips the approval of a draft and starts right away instead of waiting for the
 next run: choose it when creating a ticket, press it on a ticket, or start a todo item with
-`now:`, `sofort:` or `!` (for example "now: dim the hallway light to 30 %"). Claude then plans and
-implements in one go. For risky changes (deleting, larger rebuilds, safety functions, heating,
+`now:`, `sofort:` or `!` (for example "now: dim the hallway light to 30 %"; the todo prefixes only
+work with the option `allow_immediate_from_outside`, otherwise such an item gets a draft first).
+Claude then plans and implements in one go. For risky changes (deleting, larger rebuilds, safety functions, heating,
 batteries, inverters) or unclear goals it does not change anything and asks back with its plan
 instead. Snapshots, backup, watches and rollback work as usual. Pressed on a ticket with a draft, it
 implements that draft immediately.
@@ -53,7 +54,20 @@ Runs start at the configured times. Without queued tickets Claude is not started
 ## Safety
 
 - **Drafts** run with read-only tools: files can be read, Home Assistant can only be queried
-  through `ha-read` (read-only WebSocket commands and GET requests).
+  through `ha-read` (a fixed list of read-only WebSocket commands and GET requests).
+- **Claude never gets the Supervisor token.** `ha-read` and `ha-api` talk to a local proxy in the
+  add-on with a one-time token per call. In a draft or inspection that token only reads; in an
+  implementation it may write, but never reaches the Supervisor API, the services `hassio.*`,
+  `shell_command.*` and `homeassistant.stop`, users, tokens or the events of the add-on.
+- **Closed in every phase:** `secrets.yaml`, the login files in `.storage`, `core.config_entries`,
+  the login of Claude, the snapshot repository, `/proc`, the add-on code and `curl`, `wget`, `nc`.
+  Web pages only from the Home Assistant documentation and community and from GitHub. `cfg-git`
+  checks every argument (no options that write files or run programs).
+- **Board, API and terminal** answer only the ingress of Home Assistant; other add-ons in the
+  internal network get "403".
+- **From outside the board** (todo list, event, notification buttons) only active admins count,
+  each notification has a random code and older buttons stop working, at most 10 new tickets per
+  hour are accepted, and immediate implementation needs the option `allow_immediate_from_outside`.
 - **Implementations** may edit files and use the Home Assistant API. The rules Claude gets
   (`app/prompt/regeln.en.md`, German `regeln.de.md`) forbid rewriting whole files, editing
   `.storage` directly, switching devices, touching add-ons, updates, users or secrets, and require a
@@ -73,21 +87,26 @@ Runs start at the configured times. Without queued tickets Claude is not started
   are listed in the report and have to be undone by hand.
 - The board and the terminal are only available to Home Assistant admins.
 
-Rules are a strong guideline for the model, not a sandbox. The add-on has write access to your
-configuration and the `manager` role on the Supervisor. Approve only drafts you understand.
+Rules and permission checks close the obvious paths, but they are not a sandbox: in an
+implementation Claude has a shell as the same user as the add-on. The add-on has write access to
+your configuration and the `manager` role on the Supervisor (the smallest role that covers backups,
+their jobs and restarting Core). Approve only drafts you understand.
 
 ## Notifications with buttons
 
 With `notify_service` set to a mobile app (for example `notify.mobile_app_phone`), each
 notification carries buttons: for a draft "Implement now", "On the next run" and "Discard", for a
 question "Answer" (with a text field), after an implementation "All good" and "Ask for a fix" (with
-a text field), after an error "Try again". Tapping the notification opens the board.
+a text field), after an error "Try again". Tapping the notification opens the board. Buttons only
+count when pressed by an active Home Assistant admin and only on the latest notification of a ticket;
+buttons of notifications from before 0.8.0 no longer work.
 
 ## Usage quota
 
 Claude Code reports how much of the subscription is used. The board shows the highest window
 (five hours or seven days). Above `max_quota_percent` (default 80) scheduled runs are skipped until
-that window resets, so the subscription stays available for other work. Immediate tickets still run.
+that window resets, so the subscription stays available for other work. Immediate tickets from the
+board still run; immediate runs from the todo list, events and notification buttons respect the limit.
 
 ## Watches between runs
 
@@ -123,10 +142,18 @@ data:
     modus: entwurf
 ```
 
+The event only counts when it carries the user of an active admin, for example when it is fired
+through the REST or WebSocket API with an admin's token. Automations triggered by a sensor run
+without a user; for them add an item to the todo list instead (`todo.add_item` on
+`todo.hausmeister`). `modus: sofort` implements right away only with `allow_immediate_from_outside`,
+otherwise it creates a draft. At most 10 new tickets per hour come in from the todo list and events.
+
 ## Where things are
 
 - Tickets: `/share/hausmeister/tickets/` (one Markdown file per ticket), state in the add-on data.
-- Knowledge about your house that Claude keeps: `/share/hausmeister/WISSEN.md`. You can edit it.
+- Knowledge about your house that Claude keeps: `/data/wissen.md` inside the add-on (edit it in the
+  terminal of the board). `/share/hausmeister/WISSEN.md` is a copy for reading and is overwritten;
+  on the update to 0.8.0 an existing file there is taken over once.
 - Snapshots: tab **Backups**; in the terminal `cfg-git log`.
 
 ## Sensors
@@ -153,6 +180,7 @@ language. The sensors are recreated by the add-on after a restart of Home Assist
 | `max_backup_gb` | 2 | No HA backup before a change when the config folder is larger; the git snapshot still runs. |
 | `inspection_day` | off | Inspection for suggestions: `off`, `daily` or a weekday (`mon` … `sun`). The German values `aus`, `taeglich` and `mo` … `so` still work. |
 | `language` | auto | `auto` follows Home Assistant, `de` German, `en` English. |
+| `allow_immediate_from_outside` | false | `sofort:`/`now:`/`!` in the todo list and `modus: sofort` in the event implement right away. Off: a draft first. |
 
 ## Deutsch
 
@@ -196,8 +224,9 @@ gespeicherte Texte (alte Berichte, Kommentare, Verlaufsnotizen) bleiben in ihrer
 
 **Sofort umsetzen** überspringt die Freigabe eines Entwurfs und startet gleich, statt auf den
 nächsten Lauf zu warten: beim Anlegen wählen, am Ticket drücken oder einen To-do-Eintrag mit
-`sofort:`, `now:` oder `!` beginnen (zum Beispiel „sofort: Flurlicht auf 30 % dimmen“). Claude plant
-und setzt dann in einem Zug um. Bei riskanten Änderungen (Löschen, größere Umbauten,
+`sofort:`, `now:` oder `!` beginnen (zum Beispiel „sofort: Flurlicht auf 30 % dimmen“; die
+To-do-Präfixe wirken nur mit der Option `allow_immediate_from_outside`, sonst bekommt der Eintrag
+zuerst einen Entwurf). Claude plant und setzt dann in einem Zug um. Bei riskanten Änderungen (Löschen, größere Umbauten,
 Schutzfunktionen, Heizung, Akkus, Wechselrichter) oder unklarem Ziel ändert es nichts und fragt mit
 seinem Plan zurück. Sicherungen, Wächter und Zurückrollen gelten wie immer. An einem Ticket mit
 Entwurf gedrückt, setzt es genau diesen Entwurf sofort um.
@@ -208,7 +237,22 @@ Läufe starten zu den eingestellten Zeiten. Steht nichts an, wird Claude gar nic
 ### Sicherheit
 
 - **Entwürfe** laufen mit lesenden Werkzeugen: Dateien lesen, Home Assistant nur über `ha-read`
-  abfragen (lesende WebSocket-Befehle und GET-Anfragen).
+  abfragen (eine feste Liste lesender WebSocket-Befehle und GET-Anfragen).
+- **Claude bekommt nie das Supervisor-Token.** `ha-read` und `ha-api` sprechen mit einem lokalen
+  Proxy im Add-on, mit einem Einmal-Token je Aufruf. Im Entwurf und beim Rundgang darf es nur lesen;
+  in der Umsetzung auch schreiben, aber nie die Supervisor-API, die Dienste `hassio.*`,
+  `shell_command.*` und `homeassistant.stop`, Benutzer, Tokens oder die Ereignisse des Add-ons.
+- **In jeder Phase gesperrt:** `secrets.yaml`, die Anmeldedateien in `.storage`,
+  `core.config_entries`, die Anmeldung von Claude, das Sicherungs-Repository, `/proc`, der Code des
+  Add-ons sowie `curl`, `wget`, `nc`. Webseiten nur aus der Home-Assistant-Doku und -Community und
+  von GitHub. `cfg-git` prüft jedes Argument (keine Optionen, die Dateien schreiben oder Programme
+  starten).
+- **Board, API und Terminal** antworten nur dem Ingress von Home Assistant; andere Add-ons im
+  internen Netz bekommen „403“.
+- **Von außerhalb des Boards** (To-do-Liste, Ereignis, Knöpfe in Meldungen) zählen nur aktive
+  Admins, jede Meldung trägt einen Zufallscode und ältere Knöpfe wirken nicht mehr, höchstens 10 neue
+  Tickets je Stunde werden angenommen, und Sofort-Umsetzung braucht die Option
+  `allow_immediate_from_outside`.
 - **Umsetzungen** dürfen Dateien ändern und die Home-Assistant-API nutzen. Die Regeln für Claude
   (`app/prompt/regeln.de.md`, englisch `regeln.en.md`) verbieten, ganze Dateien neu zu schreiben,
   `.storage` direkt zu ändern, Geräte zu schalten, Add-ons, Updates, Benutzer oder Geheimnisse
@@ -229,22 +273,26 @@ Läufe starten zu den eingestellten Zeiten. Steht nichts an, wird Claude gar nic
   der Registry) stehen im Bericht und müssen von Hand zurückgenommen werden.
 - Board und Terminal sind nur für Home-Assistant-Admins da.
 
-Die Regeln sind eine starke Vorgabe für das Modell, keine Sandbox. Das Add-on hat Schreibzugriff
-auf deine Konfiguration und die Rolle `manager` beim Supervisor. Gib nur Entwürfe frei, die du
-verstehst.
+Regeln und Rechteprüfungen schließen die naheliegenden Wege, sind aber keine Sandbox: in der
+Umsetzung hat Claude eine Shell als derselbe Benutzer wie das Add-on. Das Add-on hat Schreibzugriff
+auf deine Konfiguration und die Rolle `manager` beim Supervisor (die kleinste Rolle, die Sicherungen,
+deren Jobs und den Neustart von Core abdeckt). Gib nur Entwürfe frei, die du verstehst.
 
 ### Benachrichtigungen mit Knöpfen
 
 Ist `notify_service` auf eine Handy-App gesetzt (zum Beispiel `notify.mobile_app_handy`), hat jede
 Meldung Knöpfe: beim Entwurf „Jetzt umsetzen“, „Beim nächsten Lauf“ und „Verwerfen“, bei einer
 Rückfrage „Antworten“ (mit Textfeld), nach einer Umsetzung „Passt“ und „Nachbessern“ (mit
-Textfeld), nach einem Fehler „Erneut versuchen“. Ein Tipp auf die Meldung öffnet das Board.
+Textfeld), nach einem Fehler „Erneut versuchen“. Ein Tipp auf die Meldung öffnet das Board. Knöpfe
+zählen nur, wenn ein aktiver Home-Assistant-Admin sie drückt, und nur an der neuesten Meldung eines
+Tickets; Knöpfe aus Meldungen von vor 0.8.0 wirken nicht mehr.
 
 ### Kontingent
 
 Claude Code meldet, wie viel vom Abo verbraucht ist. Das Board zeigt das höchste Fenster (fünf
 Stunden oder sieben Tage). Über `max_quota_percent` (Vorgabe 80) fallen geplante Läufe aus, bis das
-Fenster erneuert ist, damit das Abo für anderes frei bleibt. Sofort-Tickets laufen trotzdem.
+Fenster erneuert ist, damit das Abo für anderes frei bleibt. Sofort-Tickets aus dem Board laufen
+trotzdem; Sofort-Läufe aus der To-do-Liste, aus Ereignissen und von Knöpfen halten die Grenze ein.
 
 ### Wächter zwischen den Läufen
 
@@ -279,11 +327,19 @@ data:
     modus: entwurf
 ```
 
+Das Ereignis zählt nur, wenn es den Benutzer eines aktiven Admins trägt, zum Beispiel ausgelöst über
+die REST- oder WebSocket-API mit dem Token eines Admins. Automationen, die ein Sensor auslöst, laufen
+ohne Benutzer; dafür besser einen Eintrag in die To-do-Liste schreiben (`todo.add_item` auf
+`todo.hausmeister`). `modus: sofort` setzt nur mit `allow_immediate_from_outside` sofort um, sonst
+entsteht ein Entwurf. Aus To-do-Liste und Ereignissen kommen höchstens 10 neue Tickets je Stunde.
+
 ### Wo was liegt
 
 - Tickets: `/share/hausmeister/tickets/` (eine Markdown-Datei je Ticket), der Zustand in den
   Add-on-Daten.
-- Wissen über dein Haus, das Claude pflegt: `/share/hausmeister/WISSEN.md`. Du kannst es bearbeiten.
+- Wissen über dein Haus, das Claude pflegt: `/data/wissen.md` im Add-on (im Terminal des Boards
+  bearbeiten). `/share/hausmeister/WISSEN.md` ist eine Kopie zum Lesen und wird überschrieben; beim
+  Update auf 0.8.0 wird eine vorhandene Datei dort einmal übernommen.
 - Sicherungen: Reiter **Sicherungen**; im Terminal `cfg-git log`.
 
 ### Sensoren
@@ -310,3 +366,4 @@ Nach einem Neustart von Home Assistant legt das Add-on die Sensoren innerhalb vo
 | `max_backup_gb` | 2 | Keine HA-Sicherung vor einer Änderung, wenn der Konfigurationsordner größer ist; die Git-Sicherung läuft trotzdem. |
 | `inspection_day` | off | Rundgang für Vorschläge: `off`, `daily` oder ein Wochentag (`mon` … `sun`). Die deutschen Werte `aus`, `taeglich` und `mo` … `so` gelten weiter. |
 | `language` | auto | `auto` folgt Home Assistant, `de` Deutsch, `en` Englisch. |
+| `allow_immediate_from_outside` | false | `sofort:`/`now:`/`!` in der To-do-Liste und `modus: sofort` im Ereignis setzen sofort um. Aus: zuerst ein Entwurf. |

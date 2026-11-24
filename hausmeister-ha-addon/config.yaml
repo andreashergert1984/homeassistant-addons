@@ -1,6 +1,6 @@
 ---
 name: Hausmeister
-version: "0.7.0"
+version: "0.8.0"
 slug: hausmeister
 description: >-
   Smart home tickets that Claude Code works on after your approval:
@@ -22,6 +22,8 @@ panel_admin: true
 
 homeassistant_api: true
 hassio_api: true
+# manager is the smallest role that covers /backups, /jobs and /core/* (backup lacks /jobs and
+# /core, homeassistant lacks /backups and /jobs). Claude never gets this token (local proxy).
 hassio_role: manager
 
 map:
@@ -31,9 +33,11 @@ map:
   - type: share
     read_only: false
 
-# Login of Claude and the large snapshot history stay out of HA backups.
+# Login of Claude, its session transcripts and the large snapshot history stay out of HA backups.
 backup_exclude:
   - "home/.claude/.credentials.json"
+  - "home/.claude/projects"
+  - "home/.claude/projects/*"
   - "configgit"
   - "configgit/*"
 
@@ -52,6 +56,7 @@ options:
   max_backup_gb: 2
   inspection_day: "off"
   language: auto
+  allow_immediate_from_outside: false
 
 schema:
   run_times:
@@ -67,3 +72,4 @@ schema:
   max_backup_gb: int(0,1000)
   inspection_day: list(off|daily|mon|tue|wed|thu|fri|sat|sun|aus|taeglich|mo|di|mi|do|fr|sa|so)
   language: list(auto|de|en)?
+  allow_immediate_from_outside: bool

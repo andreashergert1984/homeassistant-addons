@@ -186,9 +186,10 @@ function quotaBlocks(quota, maxPercent, nowSec) {
   return quota.utilization * 100 >= maxPercent;
 }
 
-// Buttons of a push notification per state (mobile app actionable notifications).
-function notifyActions(state, id) {
-  const a = (key, title, extra = {}) => ({ action: `HAUSMEISTER_${key}_${id}`, title: i18n.t(title), ...extra });
+// Buttons of a push notification per state (mobile app actionable notifications). The nonce is
+// random per notification and stored at the ticket; only a button with the current nonce counts.
+function notifyActions(state, id, nonce = '') {
+  const a = (key, title, extra = {}) => ({ action: `HAUSMEISTER_${key}_${id}${nonce ? `_${nonce}` : ''}`, title: i18n.t(title), ...extra });
   const input = (placeholder) => ({ behavior: 'textInput', textInputButtonTitle: i18n.t('notify.btn.send'), textInputPlaceholder: i18n.t(placeholder) });
   switch (state) {
     case 'entwurf': return [a('SOFORT', 'notify.btn.now'), a('UMSETZEN', 'notify.btn.next_run'), a('VERWERFEN', 'notify.btn.discard')];
@@ -200,11 +201,12 @@ function notifyActions(state, id) {
   }
 }
 
+// { key, id, nonce }; nonce is null for buttons from before 0.8.0 (they are refused).
 function parseNotifyAction(action) {
-  const m = /^HAUSMEISTER_([A-Z]+)_(\d+)$/.exec(String(action || ''));
+  const m = /^HAUSMEISTER_([A-Z]+)_(\d+)(?:_([0-9a-f]{16,64}))?$/.exec(String(action || ''));
   if (!m) return null;
   const key = m[1].toLowerCase();
-  return ACTIONS[key] ? { key, id: Number(m[2]) } : null;
+  return ACTIONS[key] ? { key, id: Number(m[2]), nonce: m[3] || null } : null;
 }
 
 // Result of a Claude run (stream-json or json) to ticket outcome.
@@ -277,7 +279,11 @@ const VOLATILE = [
   /discovered_contacts/, /^\.storage\/(core\.(device_registry|entity_registry|area_registry|restore_state)|person|bluetooth\.|http\.|mobile_app|assist_pipeline\.pipelines|repairs\.issue_registry|homeassistant\.exposed_entities)/,
   /^\.storage\/.*(token|session|cookie|cache)/i, /\.log$/,
 ];
-const isVolatile = (file, learned = []) => VOLATILE.some((r) => r.test(file)) || learned.includes(file);
+// Configuration is never learned as volatile, even if it changed between two runs: YAML,
+// dashboards, automations, scripts and scenes. Otherwise a rollback would skip them.
+const NEVER_VOLATILE = [/\.ya?ml$/i, /(^|\/)lovelace/i, /(^|\/)(automations?|scripts?|scenes?)(\.|\/|$)/i];
+const neverVolatile = (file) => NEVER_VOLATILE.some((r) => r.test(String(file)));
+const isVolatile = (file, learned = []) => VOLATILE.some((r) => r.test(file)) || (learned.includes(file) && !neverVolatile(file));
 
 // Normalized title for "already proposed or declined".
 function sameKey(s) {
@@ -303,4 +309,4 @@ function slug(s) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'ticket';
 }
 
-module.exports = { STATE_KEYS, states, stateLabel, ACTIONS, actionLabel, actionsFor, applyAction, ACTOR, REASON, actorLabel, reasonLabel, CATEGORY_KEYS, categories, INSPECTION_DAYS, inspectionDue, shrunkList, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, sameKey, VOLATILE, isVolatile, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };
+module.exports = { STATE_KEYS, states, stateLabel, ACTIONS, actionLabel, actionsFor, applyAction, ACTOR, REASON, actorLabel, reasonLabel, CATEGORY_KEYS, categories, INSPECTION_DAYS, inspectionDue, shrunkList, parseTimes, dueTimes, nextRun, dayKey, pickQueue, compareWatch, confirmWatch, watchAlarm, interpretResult, RESULT_SCHEMA, slug, sameKey, VOLATILE, isVolatile, neverVolatile, parseIntake, stepText, parseStream, quotaFrom, quotaBlocks, notifyActions, parseNotifyAction };

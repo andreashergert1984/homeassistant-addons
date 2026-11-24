@@ -35,3 +35,6 @@ configuration:
   language:
     name: Sprache
     description: Sprache von Board, Meldungen und Claudes Texten. auto folgt der Sprache von Home Assistant (Deutsch oder Englisch, sonst Englisch), de oder en legen sie fest.
+  allow_immediate_from_outside:
+    name: Sofort-Umsetzung von außerhalb des Boards
+    description: "Aus: die Präfixe sofort:, now: und ! in der To-do-Liste und modus sofort im Ereignis hausmeister_neues_ticket legen nur einen Entwurf an. An: sie werden ohne Entwurf sofort umgesetzt. Das Board selbst ist nicht betroffen."

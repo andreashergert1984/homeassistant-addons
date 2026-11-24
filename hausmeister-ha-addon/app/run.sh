@@ -8,7 +8,8 @@ mkdir -p /data/home /data/work /share/hausmeister/tickets
 TZ_HA="$(curl -sf -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" http://supervisor/info | jq -r '.data.timezone // empty' || true)"
 export TZ="${TZ_HA:-Europe/Berlin}"
 
-# Rules for Claude (/data/work/CLAUDE.md), the greeting of the terminal and WISSEN.md are
+# Rules for Claude (/data/work/CLAUDE.md), the greeting of the terminal and the knowledge file
+# (/data/wissen.md, exported to /share/hausmeister/WISSEN.md) are
 # written by the server in the active language (option "language", auto follows Home Assistant).
 
 # Login terminal, only reachable through the board (ingress).

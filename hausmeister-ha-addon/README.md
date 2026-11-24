@@ -103,7 +103,8 @@ On the next run Claude writes a draft and you get a notification.
 **After the implementation:** "Accept, all good", "Ask for a fix" with a comment, or "Roll back".
 
 **Implement now from anywhere:** start a todo item with `now:`, `sofort:` or `!`, for example
-"now: switch the Christmas lights on from 5 pm".
+"now: switch the Christmas lights on from 5 pm" (needs the option `allow_immediate_from_outside`,
+otherwise the item gets a draft first).
 
 **Ticket from an automation:**
 
@@ -140,6 +141,7 @@ do not come back.
 | `max_backup_gb` | 2 | no HA backup before a change when the config folder is larger; the git snapshot still runs |
 | `inspection_day` | off | inspection: `off`, `daily` or `mon` … `sun` (the German values `aus`, `taeglich`, `mo` … `so` still work) |
 | `language` | auto | `auto` follows Home Assistant (English or German, otherwise English), `de` or `en` sets it |
+| `allow_immediate_from_outside` | off | `sofort:`/`now:`/`!` in the todo list and `modus: sofort` in the event implement right away; off = a draft first |
 
 ## Safety, honestly
 
@@ -149,7 +151,13 @@ do not come back.
 - In the implementation the add-on has write access to the configuration and the Supervisor role `manager`.
   The rules are a strong guideline for the model, but not a sandbox. **Only approve drafts you understand.**
   This applies all the more to "Implement now".
-- Board and terminal are only visible to Home Assistant admins.
+- Board and terminal are only visible to Home Assistant admins and only answer the ingress of Home Assistant.
+- Claude never gets the Supervisor token: its helpers go through a local proxy that only reads in a draft and
+  never reaches the Supervisor API, `hassio.*`, `shell_command.*`, users or tokens. `secrets.yaml`, login files,
+  the add-on itself and `curl`/`wget` are closed; web pages only from the Home Assistant docs and GitHub.
+- From outside the board (todo list, events, notification buttons) only active admins count, at most 10 new
+  tickets per hour, and immediate implementation needs `allow_immediate_from_outside`.
+- In an implementation Claude still has a shell as the add-on user, so this is no sandbox.
 - Backups: a git history of the configuration of its own (without databases, logs, login data, model folders
   and files over 20 MB) and, if turned on, a partial HA backup before every implementation.
 

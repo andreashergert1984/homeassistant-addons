@@ -373,5 +373,14 @@
  "new.mode_collect": "Just collect",
  "new.mode_collect_hint": "Goes on the list, nothing happens yet.",
  "new.submit": "Create ticket",
- "new.hint": "Tickets also come from the todo list \"Hausmeister\", by voice or from automations. An item starting with \"now:\" or \"!\" is implemented right away. Without the immediate mode nothing is changed without your approval."
+ "new.hint": "Tickets also come from the todo list \"Hausmeister\", by voice or from automations. An item starting with \"now:\" or \"!\" is implemented right away. Without the immediate mode nothing is changed without your approval.",
+ "err.forbidden": "Only reachable through Home Assistant (ingress)",
+ "err.edit_draft": "A draft exists for this text, so the ticket cannot be edited. Write a comment and choose \"Ask Claude for a draft\", or discard the ticket and create a new one.",
+ "err.proxy_no_supervisor": "The Supervisor API is not available to Claude",
+ "intake.immediate_ignored": "Asked for immediate implementation from outside the board. That is turned off (option allow_immediate_from_outside), so this ticket gets a draft first.",
+ "rate.title": "Hausmeister: too many new tickets",
+ "rate.text": "More than {max} new tickets arrived within one hour from the todo list or from events. Further ones are discarded until the hour is over. Please check your automations.",
+ "cli.cfg_git_only": "cfg-git: only {list}",
+ "cli.cfg_git_refused": "cfg-git: argument not allowed: {arg}",
+ "cli.path_not_allowed": "Path not allowed: {path}"
 }
