@@ -1,3 +1,7 @@
+## 2.83.0.7
+
+- Kamera pro Gerät abschaltbar ("Kamera aus" im Kamerabild, "Kamera an" über der Liste), für Geräte mit Handscanner. Ohne Kamera läuft kein Kamerabild und kein Dekodieren mehr; der Platz geht an eine größere Statuszeile und die Liste "Zuletzt" mit den letzten acht Buchungen dieses Geräts (rückgängig gemachte durchgestrichen).
+
 ## 2.83.0.6
 
 - Handscanner (USB oder Bluetooth-HID, z. B. NETUM L8BL Pro): Scans kommen jetzt auch an, wenn im HA-Panel die HA-Oberfläche um das Terminal den Fokus hat. Das Terminal hört dafür auf den äußeren HA-Rahmen mit (gleicher Ursprung über Ingress); nach einem Neuladen des Rahmens wird nichts doppelt gebucht, in Eingabefeldern bleibt der Scan im Feld.

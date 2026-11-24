@@ -53,6 +53,20 @@ input, select { width:100%; padding:14px; border-radius:10px; border:1px solid v
 .actions { display:flex; gap:8px; margin-top:16px; }
 .btn { flex:1; padding:18px; border:0; border-radius:12px; font:700 19px system-ui; color:#fff; background:#2a3037; }
 .btn.go { background:var(--in); } .btn.cnt { background:var(--cnt); }
+#camOff { position:absolute; left:8px; bottom:8px; padding:8px 12px; border:0; border-radius:10px; background:rgba(0,0,0,.55); color:#fff; font:600 14px system-ui; z-index:2; }
+#camOn, #histWrap { display:none; }
+body.nocam #cam { display:none; }
+body.nocam #camOn { display:inline; }
+body.nocam #status { font-size:28px; padding:22px 18px; min-height:130px; }
+body.nocam #status small { font-size:19px; margin-top:6px; }
+body.nocam #acts button { padding:16px 22px; font-size:19px; }
+body.nocam #histWrap { display:block; margin-bottom:14px; }
+#hist { list-style:none; margin:0; padding:0; }
+#hist li { display:flex; gap:10px; padding:10px 12px; margin-bottom:6px; border-radius:10px; background:var(--card); font-size:17px; }
+#hist li time { color:var(--mut); font-variant-numeric:tabular-nums; }
+#hist li span { flex:1; } #hist li small { display:block; color:var(--mut); font-size:14px; }
+#hist li.out { border-left:4px solid var(--out); } #hist li.in { border-left:4px solid var(--in); } #hist li.count { border-left:4px solid var(--cnt); }
+#hist li.undone span { text-decoration:line-through; color:var(--mut); }
 #kbd { position:fixed; left:-1000px; top:0; opacity:0; }
 </style>
 </head>
@@ -62,10 +76,11 @@ input, select { width:100%; padding:14px; border-radius:10px; border:1px solid v
   <button class="mode" data-m="in">Einlagern</button>
   <button class="mode" data-m="count">Zählen</button>
 </header>
-<div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div><button id="camSwitch">Kamera wechseln</button></div>
+<div id="cam"><video id="v" playsinline muted></video><div class="frame"></div><div id="camoff"></div><button id="camOff">Kamera aus</button><button id="camSwitch">Kamera wechseln</button></div>
 <div id="flash"></div>
-<div id="status"><span id="acts"><button id="change">Ändern</button><button id="undo">Rückgängig</button></span><span id="msg">Bereit. Code vor die Kamera halten.</span></div>
+<div id="status"><span id="acts"><button id="change">Ändern</button><button id="undo">Rückgängig</button></span><span id="msg">Bereit. Code scannen.</span></div>
 <main>
+  <div id="histWrap"><h3><span>Zuletzt</span><span><button class="link" id="camOn">Kamera an</button></span></h3><ul id="hist"><li><span>Noch nichts gebucht.</span></li></ul></div>
   <h3><span>Ohne Code</span><span><button class="link" id="editTiles">Bearbeiten</button><button class="link" id="addTile">+ Neu</button></span></h3>
   <div id="tiles"></div>
 </main>
@@ -110,8 +125,20 @@ function say(text, sub, cls, undoId, out) {
   if (sub) { const sm = document.createElement('small'); sm.textContent = sub; $('#msg').append(sm); }
   lastUndo = undoId || null;
   lastOut = out || null;
+  if (undoId) addHist(undoId, text, sub);
   $('#undo').style.display = undoId ? 'block' : 'none';
   $('#change').style.display = out ? 'block' : 'none';
+}
+// Verlauf der letzten Buchungen an diesem Gerät (nur Anzeige, nur ohne Kamera sichtbar).
+const hist = [];
+function addHist(id, text, sub) {
+  const e = hist.find((h) => h.id === id);
+  if (e) { e.text = text; e.sub = sub; } else hist.unshift({ id, text, sub, mode, t: new Date(), undone: false });
+  hist.length = Math.min(hist.length, 8); renderHist();
+}
+function markUndone(id) { const e = hist.find((h) => h.id === id); if (e) { e.undone = true; renderHist(); } }
+function renderHist() {
+  $('#hist').innerHTML = hist.map((h) => `<li class="${h.mode}${h.undone ? ' undone' : ''}"><time>${h.t.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' })}</time><span>${esc(h.text)}${h.sub ? `<small>${esc(h.sub)}</small>` : ''}</span></li>`).join('') || '<li><span>Noch nichts gebucht.</span></li>';
 }
 const fmtExp = (iso) => iso ? iso.split('-').reverse().join('.') : 'ohne MHD';
 function sayOut(r, prod) {
@@ -145,7 +172,7 @@ function armIdle() {
 document.querySelectorAll('.mode').forEach((b) => b.onclick = () => { setMode(b.dataset.m); b.blur(); });
 $('#undo').onclick = async () => {
   if (!lastUndo) return;
-  try { await api('undo', { id: lastUndo }); say('Rückgängig gemacht', '', 'warn'); good(); }
+  try { const id = lastUndo; await api('undo', { id }); markUndone(id); say('Rückgängig gemacht', '', 'warn'); good(); }
   catch (e) { say(e.message, '', 'bad'); bad(); }
 };
 
@@ -287,7 +314,7 @@ async function outSheet({ r, prod }) {
     if (!(n > 0)) { q.focus(); return; }
     try {
       const res = await api('correct', { id: r.id, quantity: n, batch_id: batch ? Number(batch) : undefined });
-      closeSheet(true); sayOut(res, prod);
+      closeSheet(true); if (res.ok && res.id !== r.id) markUndone(r.id); sayOut(res, prod);
     } catch (e) { closeSheet(null); say(e.message, '', 'bad'); bad(); }
   };
   await p;
@@ -428,6 +455,15 @@ async function startCamera() {
   };
   loop();
 }
+function camDisabled() { try { return localStorage.getItem('yuvomi_camera_off') === '1'; } catch { return false; } }
+function applyCam() {
+  const off = camDisabled();
+  document.body.classList.toggle('nocam', off);
+  if (off) { camGen++; if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; } $('#v').srcObject = null; }
+  else startCamera();
+}
+$('#camOff').onclick = (e) => { e.currentTarget.blur(); try { localStorage.setItem('yuvomi_camera_off', '1'); } catch {} applyCam(); };
+$('#camOn').onclick = (e) => { e.currentTarget.blur(); try { localStorage.removeItem('yuvomi_camera_off'); } catch {} applyCam(); };
 $('#camSwitch').onclick = (e) => {
   e.currentTarget.blur();
   try { localStorage.setItem('yuvomi_camera', camPref() === 'user' ? 'environment' : 'user'); } catch {}
@@ -444,7 +480,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   } catch (e) {
     say(e.message, 'Add-on-Optionen prüfen: api_token', 'bad'); return;
   }
-  renderTiles(); setMode('out'); startCamera();
+  renderTiles(); setMode('out'); applyCam();
 })();
 </script>
 </body>

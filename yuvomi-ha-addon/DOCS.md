@@ -53,6 +53,12 @@ stored on the device. Use the front camera on a wall device: hold the barcode
 was out of the picture for about 2.5 seconds, so holding it too long does not
 book twice.
 
+**Without camera:** with a hand scanner the camera is not needed. "Kamera aus"
+in the camera picture switches it off on this device (stored there); the space
+then goes to a larger status line and a list of the last bookings ("Zuletzt",
+undone bookings crossed out, only kept until the page reloads). "Kamera an"
+above that list brings the camera back.
+
 **Scanner engine:** by default the terminal decodes with ZXing (plain JavaScript).
 The browser's own `BarcodeDetector` needs Google Play services on Android and
 crashes the WebView on devices without them; opening the terminal directly with
