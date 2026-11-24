@@ -1,3 +1,7 @@
+## 2.83.0.8
+
+- Geräte ohne Kamera (Wandgerät mit Handscanner): oben und unten mehr Rand, damit der Hinweis von Fully Kiosk ohne Lizenz die Modusknöpfe und die Knöpfe der Eingabeblätter nicht verdeckt.
+
 ## 2.83.0.7
 
 - Kamera pro Gerät abschaltbar ("Kamera aus" im Kamerabild, "Kamera an" über der Liste), für Geräte mit Handscanner. Ohne Kamera läuft kein Kamerabild und kein Dekodieren mehr; der Platz geht an eine größere Statuszeile und die Liste "Zuletzt" mit den letzten acht Buchungen dieses Geräts (rückgängig gemachte durchgestrichen).

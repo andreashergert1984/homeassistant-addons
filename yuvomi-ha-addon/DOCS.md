@@ -57,7 +57,9 @@ book twice.
 in the camera picture switches it off on this device (stored there); the space
 then goes to a larger status line and a list of the last bookings ("Zuletzt",
 undone bookings crossed out, only kept until the page reloads). "Kamera an"
-above that list brings the camera back.
+above that list brings the camera back. Without camera the page also keeps a
+margin at the top and bottom, so the notice Fully Kiosk shows without a licence
+does not cover the buttons.
 
 **Scanner engine:** by default the terminal decodes with ZXing (plain JavaScript).
 The browser's own `BarcodeDetector` needs Google Play services on Android and
