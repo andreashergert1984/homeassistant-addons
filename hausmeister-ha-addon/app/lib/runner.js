@@ -7,6 +7,10 @@ const path = require('path');
 const ha = require('./ha');
 const git = require('./git');
 const L = require('./logic');
+const i18n = require('./i18n');
+
+const tr = i18n.t;
+const { ACTOR, REASON } = L;
 
 const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
 const SHARE = process.env.HM_SHARE_DIR || '/share/hausmeister';
@@ -32,7 +36,7 @@ function configFiles(dir = git.WORK) {
       }
     };
     for (const d of ['packages', 'automations', 'scripts', 'dashboards', 'blueprints']) if (fs.existsSync(path.join(dir, d))) walk(d);
-  } catch (e) { console.error('[hausmeister] Dateigrößen:', e.message); }
+  } catch (e) { console.error('[hausmeister] file sizes:', e.message); }
   return sizes;
 }
 
@@ -40,36 +44,39 @@ async function watchSnapshot() {
   return { states: await ha.states(), files: configFiles() };
 }
 
+// Prompts come from the dictionary of the active language; the last line tells Claude
+// in which language to write. Status values and field names stay the internal keys.
 function rundgangPrompt(skip) {
   return [
-    'Aufgabe: RUNDGANG, Frage: Was würdest du an diesem Haus anpassen? Du gehst nur lesend durch die Installation. Ändere nichts.',
-    'Schau dir an: offene Reparaturen (ha-read ws repairs/list_issues), Entitäten, die seit über 24 Stunden nicht verfügbar sind, Automationen und Skripte mit Fehlern in den letzten Ausführungen (ha-read ws trace/list), Warnungen und Fehler im Log (ha-read log 500), die Konfigurationsprüfung (ha-read check), schwache Batterien, Sicherheitslücken (offene Türen und Fenster ohne Meldung, abgeschaltete Alarme), Energie (Verbraucher, die unnötig laufen, Lastverschiebung, PV-Überschuss), Komfort (wiederkehrende Handgriffe, die eine Automation übernehmen könnte), Aufräumen (verwaiste Entitäten, ungenutzte Automationen und Helfer, doppelte Dinge).',
-    'Liefere in vorschlaege höchstens zehn Vorschläge, die sich wirklich lohnen, je mit kategorie, nutzen, aufwand und einer begruendung mit Beleg aus der Installation. Was ein Mensch vor Ort tun muss (Batterie wechseln, Gerät prüfen), bekommt handarbeit true. Lieber wenige gute als viele. Nichts vorschlagen, was in WISSEN.md als bewusst so vermerkt ist.',
-    skip.length ? `Diese Vorschläge gibt es schon oder sie wurden abgelehnt, nicht noch einmal vorschlagen:\n${skip.map((x) => `- ${x}`).join('\n')}` : '',
-    'Fasse in details kurz zusammen, wie es um das Haus steht. Status entwurf.',
+    tr('prompt.inspection.task'),
+    tr('prompt.inspection.look'),
+    tr('prompt.inspection.deliver'),
+    skip.length ? tr('prompt.inspection.skip', { list: skip.map((x) => `- ${x}`).join('\n') }) : '',
+    tr('prompt.inspection.summary'),
+    tr('prompt.language'),
   ].filter(Boolean).join('\n');
 }
 
 function promptFor(t, phase, store) {
   if (t.kind === 'rundgang') return rundgangPrompt(store ? store.knownSuggestions() : []);
-  const parts = [`Ticket #${t.id}: ${t.title}`, '', t.text || '(keine Beschreibung)', ''];
-  if (t.comments.length) parts.push('Kommentare:', ...t.comments.map((c) => `- ${c.at} ${c.by}: ${c.text}`), '');
+  const parts = [tr('prompt.ticket', { id: t.id, title: t.title }), '', t.text || tr('prompt.no_description'), ''];
+  if (t.comments.length) parts.push(tr('prompt.comments'), ...t.comments.map((c) => `- ${c.at} ${c.by}: ${c.text}`), '');
   const last = [...t.results].reverse().find((r) => r.phase === 'entwerfen' && r.kind === 'entwurf');
+  const prev = [...t.results].reverse().find((r) => r.phase === 'umsetzen');
   if (phase === 'entwerfen') {
-    parts.push('Aufgabe: ENTWURF. Untersuche die Lage nur lesend und beschreibe genau, was du ändern würdest. Ändere nichts.');
-    if (last) parts.push('', 'Es gibt schon einen Entwurf; überarbeite ihn anhand der Kommentare:', last.details || '');
+    parts.push(tr('prompt.draft.task'));
+    if (last) parts.push('', tr('prompt.draft.revise'), last.details || '');
   } else if (t.direct) {
-    parts.push('Aufgabe: SOFORT UMSETZEN. Ein Mensch hat das Ticket ohne vorherigen Entwurf zur Umsetzung freigegeben. Untersuche die Lage, plane und setze um. Halte dich an die Regeln.');
-    parts.push('Wenn der Eingriff riskant ist (etwas löschen, größerer Umbau, Sicherheits- oder Schutzfunktionen, Heizung, Akkus, Wechselrichter) oder das Ziel unklar ist: nichts ändern, Status rueckfrage, und in details deinen Plan beschreiben, damit er freigegeben werden kann.');
-    if (last) parts.push('', 'Vorhandener Entwurf (als Ausgangspunkt):', last.details || '');
-    const prev = [...t.results].reverse().find((r) => r.phase === 'umsetzen');
-    if (prev) parts.push('', 'Frühere Umsetzung dieses Tickets:', prev.details || prev.message || '', 'Die Kommentare danach beschreiben, was nachzubessern ist.');
+    parts.push(tr('prompt.direct.task'));
+    parts.push(tr('prompt.direct.risky'));
+    if (last) parts.push('', tr('prompt.direct.existing'), last.details || '');
+    if (prev) parts.push('', tr('prompt.prev_impl'), prev.details || prev.message || '', tr('prompt.prev_impl_hint'));
   } else {
-    parts.push('Aufgabe: UMSETZUNG des freigegebenen Entwurfs. Halte dich an den Entwurf und an die Regeln. Wenn die Lage nicht mehr zum Entwurf passt, Status rueckfrage.');
-    parts.push('', 'Freigegebener Entwurf:', last ? last.details : '(kein Entwurf gespeichert, dann rueckfrage)');
-    const prev = [...t.results].reverse().find((r) => r.phase === 'umsetzen');
-    if (prev) parts.push('', 'Frühere Umsetzung dieses Tickets:', prev.details || prev.message || '', 'Die Kommentare danach beschreiben, was nachzubessern ist.');
+    parts.push(tr('prompt.impl.task'));
+    parts.push('', tr('prompt.impl.approved'), last ? last.details : tr('prompt.impl.none'));
+    if (prev) parts.push('', tr('prompt.prev_impl'), prev.details || prev.message || '', tr('prompt.prev_impl_hint'));
   }
+  parts.push('', tr('prompt.language'));
   return parts.join('\n');
 }
 
@@ -88,7 +95,7 @@ async function haBackup(name, maxMs) {
     }
     await sleep(10000);
   }
-  throw new Error(`HA-Sicherung nach ${Math.round(maxMs / 60000)} Minuten noch nicht fertig; Umsetzung läuft mit der Git-Sicherung weiter`);
+  throw new Error(tr('err.ha_backup_timeout', { min: Math.round(maxMs / 60000) }));
 }
 
 // Size of a folder in GB (du), null when it cannot be measured in time.
@@ -103,7 +110,7 @@ function folderSizeGb(dir) {
 
 function runClaude(args, timeoutMs, onSpawn, onLine) {
   return new Promise((resolve) => {
-    const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: { ...process.env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: { ...process.env, CI: '1', HM_LANG: i18n.language() }, stdio: ['ignore', 'pipe', 'pipe'] });
     if (onSpawn) onSpawn(child);
     let stdout = '';
     let stderr = '';
@@ -169,12 +176,12 @@ class Runner {
     if (!prev) return [];
     const w = L.compareWatch(prev, now);
     const reasons = [];
-    if (w.shrunk.length) reasons.push(`Seit dem letzten Lauf geschrumpft oder gelöscht: ${w.shrunk.map((s) => `${s.file} (${s.before} → ${s.after} Byte)`).join(', ')}`);
-    if (w.vanished.length >= (this.opts.watchdog_vanished_min || 10)) reasons.push(`Seit dem letzten Lauf ${w.vanished.length} Entitäten verschwunden, z. B. ${w.vanished.slice(0, 10).join(', ')}`);
+    if (w.shrunk.length) reasons.push(tr('watchdog.shrunk', { files: L.shrunkList(w.shrunk) }));
+    if (w.vanished.length >= (this.opts.watchdog_vanished_min || 10)) reasons.push(tr('watchdog.vanished', { n: w.vanished.length, list: w.vanished.slice(0, 10).join(', ') }));
     if (reasons.length) {
       this.store.data.watchdog = { at: new Date().toISOString(), reasons };
       this.store.save();
-      await ha.notify('Hausmeister: Wächter', `${reasons.join('\n')}\n\nDas betrifft keine Hausmeister-Umsetzung. Prüfen, ob es gewollt war; Sicherungen gibt es im Reiter Sicherungen.`, { service: this.opts.notify_service, id: 'hausmeister_waechter', url: this.opts.panel_url });
+      await ha.notify(tr('watchdog.notify_title'), tr('watchdog.notify_text', { reasons: reasons.join('\n') }), { service: this.opts.notify_service, id: 'hausmeister_waechter', url: this.opts.panel_url });
     }
     return reasons;
   }
@@ -185,7 +192,7 @@ class Runner {
   }
 
   async backup(reason) {
-    try { return await git.snapshot(`Sicherung (${reason})`); } catch (e) { console.error('[hausmeister] Sicherung:', e.message); return null; }
+    try { return await git.snapshot(tr('backup.run', { reason: L.reasonLabel(reason) })); } catch (e) { console.error('[hausmeister] snapshot:', e.message); return null; }
   }
 
   // Starts a run for these tickets right away, or right after the current run.
@@ -194,55 +201,55 @@ class Runner {
     if (!this.busy) {
       const only = [...this.pending];
       this.pending.clear();
-      this.cycle('sofort', by, only).catch((e) => console.error(e));
+      this.cycle(REASON.now, by, only).catch((e) => console.error(e));
     }
   }
 
-  async cycle(reason, by = 'Zeitplan', only = null) {
-    if (this.busy) return { skipped: 'läuft schon' };
+  async cycle(reason, by = ACTOR.schedule, only = null) {
+    if (this.busy) return { skipped: tr('run.busy') };
     this.busy = true;
     const run = { at: new Date().toISOString(), reason, by, tickets: [], note: '' };
     try {
       run.backup = await this.backup(reason);
       await this.learnVolatile(run.backup);
       if (!only) {
-        try { run.watchdog = await this.watchdog(); } catch (e) { run.watchdog = [`Wächter: ${e.message}`]; }
+        try { run.watchdog = await this.watchdog(); } catch (e) { run.watchdog = [tr('watch.failed', { message: e.message })]; }
       }
       const queue = L.pickQueue(this.store.data.tickets, this.opts.max_tickets_per_run, only);
-      if (!queue.length) { run.note = 'nichts zu tun'; return run; }
-      if (!only && by === 'Zeitplan' && this.quotaBlocked()) {
+      if (!queue.length) { run.note = tr('run.nothing'); return run; }
+      if (!only && by === ACTOR.schedule && this.quotaBlocked()) {
         const q = this.store.data.quota;
-        run.note = `Kontingent bei ${Math.round(q.utilization * 100)} % (Grenze ${this.opts.max_quota_percent} %), geplanter Lauf ausgelassen bis ${q.resetsAt ? new Date(q.resetsAt * 1000).toLocaleString('de-DE') : 'zur Erneuerung'}`;
+        run.note = tr('run.quota_skip', { pct: Math.round(q.utilization * 100), max: this.opts.max_quota_percent, until: q.resetsAt ? new Date(q.resetsAt * 1000).toLocaleString(i18n.locale()) : tr('run.quota_reset') });
         return run;
       }
       if (!this.loggedIn()) {
-        run.note = 'Claude ist nicht angemeldet';
-        await ha.notify('Hausmeister', 'Claude ist nicht angemeldet. Bitte in der Seitenleiste unter Hausmeister, Anmeldung, einloggen.', { service: this.opts.notify_service, id: 'hausmeister_login' });
+        run.note = tr('run.not_logged_in');
+        await ha.notify(tr('notify.title'), tr('notify.not_logged_in'), { service: this.opts.notify_service, id: 'hausmeister_login' });
         return run;
       }
       for (const { t, phase } of queue) {
         if (t.state !== phase) continue;
         const r = await this.process(t, phase);
         run.tickets.push({ id: t.id, phase, kind: r.kind });
-        if (r.kind === 'kontingent' || r.kind === 'anmeldung') { run.note = r.kind === 'kontingent' ? 'Kontingent erschöpft, Rest beim nächsten Lauf' : 'Anmeldung abgelaufen'; break; }
+        if (r.kind === 'kontingent' || r.kind === 'anmeldung') { run.note = r.kind === 'kontingent' ? tr('run.quota_exhausted') : tr('run.login_expired'); break; }
       }
       return run;
     } catch (e) {
-      run.note = `Fehler: ${e.message}`;
+      run.note = tr('run.error', { message: e.message });
       return run;
     } finally {
       this.busy = false;
       this.current = null;
       this.store.addRun(run);
       if (this.onChange) this.onChange();
-      if (this.pending.size) setImmediate(() => this.kick([], 'sofort'));
+      if (this.pending.size) setImmediate(() => this.kick([], REASON.now));
     }
   }
 
   async process(t, phase) {
     const s = this.store;
-    this.current = { id: t.id, phase, since: new Date().toISOString(), step: 'startet', steps: [] };
-    s.move(t, 'in_arbeit', 'Hausmeister', phase === 'entwerfen' ? 'Entwurf läuft' : 'Umsetzung läuft');
+    this.current = { id: t.id, phase, since: new Date().toISOString(), step: tr('step.starting'), steps: [] };
+    s.move(t, 'in_arbeit', ACTOR.caretaker, phase === 'entwerfen' ? tr('history.draft_running') : tr('history.impl_running'));
     if (this.onChange) this.onChange();
     const result = { at: new Date().toISOString(), phase };
     let before = null;
@@ -256,28 +263,28 @@ class Runner {
       } else {
         const cur0 = this.current;
         const say = (text) => { cur0.step = text; cur0.steps.push({ at: new Date().toISOString(), text }); if (this.onChange) this.onChange(); };
-        say('liest den Zustand vorher (für die Wächter)');
+        say(tr('step.reading_before'));
         before = await watchSnapshot();
         before.logSince = Date.now() / 1000;
         this.store.data.last_impl = new Date().toISOString();
-        say('sichert die Konfiguration (Git)');
-        result.pre = await git.snapshot(`vor #${t.id} ${t.title}`);
+        say(tr('step.git_backup'));
+        result.pre = await git.snapshot(tr('backup.before', { id: t.id, title: t.title }));
         if (this.opts.backup_before_change) {
           // A partial HA backup always contains the whole config folder. With model
           // files or media in it, that takes very long; the git snapshot covers the
           // configuration, so the HA backup is left out above the limit.
           const gb = await folderSizeGb(git.WORK);
           if (gb != null && gb > this.opts.max_backup_gb) {
-            result.backup_error = `HA-Sicherung ausgelassen: der Konfigurationsordner ist ${gb.toFixed(1)} GB groß (Grenze ${this.opts.max_backup_gb} GB). Die Git-Sicherung der Konfiguration ist da.`;
-            say('HA-Sicherung ausgelassen (Ordner zu groß), Git-Sicherung ist da');
+            result.backup_error = tr('err.ha_backup_skipped', { gb: gb.toFixed(1), max: this.opts.max_backup_gb });
+            say(tr('step.ha_backup_skipped'));
           } else {
-            say('macht eine HA-Sicherung ohne Datenbank (kann ein paar Minuten dauern)');
+            say(tr('step.ha_backup'));
             try {
-              await haBackup(`Hausmeister vor #${t.id}`, 30 * 60000);
+              await haBackup(tr('backup.ha_name', { id: t.id }), 30 * 60000);
             } catch (e) { result.backup_error = e.message; }
           }
         }
-        say('Claude startet');
+        say(tr('step.claude_starts'));
         args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WRITE_TOOLS);
       }
       const cur = this.current;
@@ -295,7 +302,7 @@ class Runner {
       const proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine);
       this.child = null;
       result.steps = cur.steps.slice(-80).map((x) => x.text);
-      const r = proc.signal ? { kind: 'fehler', message: `abgebrochen nach ${this.opts.run_timeout_minutes} Minuten` } : L.interpretResult(phase, proc.stdout || proc.stderr);
+      const r = proc.signal ? { kind: 'fehler', message: tr('run.timeout', { min: this.opts.run_timeout_minutes }) } : L.interpretResult(phase, proc.stdout || proc.stderr);
       if (r.session_id) t.session_id = r.session_id;
       Object.assign(result, { kind: r.kind, message: r.message, cost: r.cost, turns: r.turns, denied: r.denied });
       if (r.out) Object.assign(result, { summary: r.out.zusammenfassung, details: r.out.details, question: r.out.frage, files: r.out.geaenderte_dateien || [], api: r.out.ha_aenderungen || [], test: r.out.test });
@@ -304,15 +311,15 @@ class Runner {
         const added = s.addSuggestions(r.out.vorschlaege || [], t.id);
         result.suggestions = added.map((x) => x.id);
         t.results.push(result);
-        s.move(t, 'erledigt', 'Hausmeister', `${added.length} neue Vorschläge`);
-        if (added.length) await ha.notify('Hausmeister: Vorschläge', `${result.summary || ''}\n\n${added.length} neue Vorschläge, was ich anpassen würde.`.trim(), { service: this.opts.notify_service, id: 'hausmeister_vorschlaege', url: this.opts.panel_url });
+        s.move(t, 'erledigt', ACTOR.caretaker, tr('history.suggestions', { n: added.length }));
+        if (added.length) await ha.notify(tr('notify.suggestions_title'), `${result.summary || ''}\n\n${tr('notify.suggestions_text', { n: added.length })}`.trim(), { service: this.opts.notify_service, id: 'hausmeister_vorschlaege', url: this.opts.panel_url });
         return r;
       }
 
       if (phase === 'umsetzen') {
         await sleep(20000); // HA writes .storage with a delay
         await ha.waitForCore();
-        result.post = await git.snapshot(`nach #${t.id} ${t.title}`);
+        result.post = await git.snapshot(tr('backup.after', { id: t.id, title: t.title }));
         const all = (await git.changedFiles(result.pre, result.post)).map((f) => f.file);
         const learned = this.store.data.volatile || [];
         // Files Claude reported or the registries it changes through the API stay in; the rest that
@@ -331,14 +338,14 @@ class Runner {
       else if (r.kind === 'entwurf' || r.kind === 'rueckfrage') to = r.kind;
       else to = (result.watch && result.watch.length) ? 'pruefen' : 'fehler';
       t.results.push(result);
-      s.move(t, to, 'Hausmeister', result.summary || result.message);
+      s.move(t, to, ACTOR.caretaker, result.summary || result.message);
       await this.tell(t, to, result);
       return r;
     } catch (e) {
       result.kind = 'fehler';
       result.message = e.message;
       t.results.push(result);
-      s.move(t, 'fehler', 'Hausmeister', e.message);
+      s.move(t, 'fehler', ACTOR.caretaker, e.message);
       await this.tell(t, 'fehler', result);
       return { kind: 'fehler' };
     }
@@ -356,7 +363,7 @@ class Runner {
         w = L.confirmWatch(first, L.compareWatch(before, await watchSnapshot()));
       }
       reasons.push(...L.watchAlarm(w, check));
-    } catch (e) { reasons.push(`Wächter konnten nicht prüfen: ${e.message}`); }
+    } catch (e) { reasons.push(tr('watch.failed', { message: e.message })); }
     return reasons;
   }
 
@@ -371,26 +378,26 @@ class Runner {
 
   async tell(t, to, result) {
     const msgs = {
-      entwurf: 'Entwurf liegt vor, bitte ansehen und freigeben.',
-      rueckfrage: `Rückfrage: ${result.question || ''}`,
-      umgesetzt: 'Umgesetzt, bitte abnehmen.',
-      pruefen: `Umgesetzt, aber die Wächter melden: ${(result.watch || []).join('; ')}`,
-      fehler: `Fehler: ${result.message || ''}`,
+      entwurf: () => tr('notify.draft'),
+      rueckfrage: () => tr('notify.question', { question: result.question || '' }),
+      umgesetzt: () => tr('notify.done'),
+      pruefen: () => tr('notify.check', { watch: (result.watch || []).join('; ') }),
+      fehler: () => tr('notify.error', { message: result.message || '' }),
     };
     if (!msgs[to]) return;
-    await ha.notify(`Hausmeister #${t.id}: ${t.title}`, `${msgs[to]}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, actions: L.notifyActions(to, t.id), url: this.opts.panel_url });
+    await ha.notify(tr('notify.ticket_title', { id: t.id, title: t.title }), `${msgs[to]()}\n\n${result.summary || ''}`.trim(), { service: this.opts.notify_service, id: `hausmeister_${t.id}`, actions: L.notifyActions(to, t.id), url: this.opts.panel_url });
   }
 
   async rollback(t, by) {
-    if (this.busy) throw new Error('Gerade läuft ein Lauf, bitte danach zurückrollen');
-    if (!t.snapshot || !t.snapshot.pre || !t.snapshot.post) throw new Error('Zu diesem Ticket gibt es keine Sicherung');
+    if (this.busy) throw new Error(tr('err.rollback_busy'));
+    if (!t.snapshot || !t.snapshot.pre || !t.snapshot.post) throw new Error(tr('err.no_snapshot'));
     this.busy = true;
     try {
-      await git.snapshot(`vor Rückrollung #${t.id}`);
+      await git.snapshot(tr('backup.before_rollback', { id: t.id }));
       const impl = [...t.results].reverse().find((r) => r.post === t.snapshot.post) || {};
       const keep = impl.changed || null;
       const files = (await git.changedFiles(t.snapshot.pre, t.snapshot.post)).filter((f) => !keep || keep.includes(f.file));
-      if (!files.length) throw new Error('Die Umsetzung hat keine Dateien geändert; Änderungen über die API bitte von Hand zurücknehmen (siehe Bericht)');
+      if (!files.length) throw new Error(tr('err.rollback_no_files'));
       const storage = files.some((f) => f.file.startsWith('.storage/') || (f.old || '').startsWith('.storage/'));
       if (storage) await ha.sup('POST', '/core/stop', undefined, { timeoutMs: 600000 });
       try {
@@ -403,9 +410,9 @@ class Runner {
         if (c && c.result === 'valid') await ha.sup('POST', '/core/restart', undefined, { timeoutMs: 600000 }).catch(() => null);
       }
       await ha.waitForCore();
-      const post = await git.snapshot(`Rückrollung #${t.id}`);
-      t.results.push({ at: new Date().toISOString(), phase: 'rueckrollung', kind: 'zurueckgerollt', summary: `Dateien auf den Stand vor der Umsetzung gesetzt: ${files.map((f) => f.file).join(', ')}`, post });
-      this.store.move(t, 'zurueckgerollt', by, `${files.length} Datei(en) zurückgesetzt${storage ? ', Core dafür gestoppt und gestartet' : ''}`);
+      const post = await git.snapshot(tr('backup.rollback', { id: t.id }));
+      t.results.push({ at: new Date().toISOString(), phase: 'rueckrollung', kind: 'zurueckgerollt', summary: tr('rollback.summary', { files: files.map((f) => f.file).join(', ') }), post });
+      this.store.move(t, 'zurueckgerollt', by, tr(storage ? 'rollback.note_storage' : 'rollback.note', { n: files.length }));
       return files;
     } finally { this.busy = false; }
   }

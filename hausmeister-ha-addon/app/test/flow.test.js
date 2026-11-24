@@ -20,6 +20,7 @@ fs.writeFileSync(path.join(cfg, 'ollama', 'models', 'blob'), 'x');
 
 const calls = [];
 let statesNow = { 'light.flur': 'on', 'sensor.temp': '21' };
+let haLanguage = 'de';
 const fake = http.createServer((req, res) => {
   let body = '';
   req.on('data', (d) => { body += d; });
@@ -27,6 +28,7 @@ const fake = http.createServer((req, res) => {
     calls.push(`${req.method} ${req.url}`);
     const json = (v) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(v)); };
     if (req.url === '/api/') return json({ message: 'API running.' });
+    if (req.url === '/api/config') return json({ language: haLanguage, time_zone: 'Europe/Berlin' });
     if (fs.existsSync(path.join(tmp, 'broken'))) statesNow = { 'light.flur': 'on' };
     if (req.url === '/api/states' && req.method === 'GET') return json(Object.entries(statesNow).map(([entity_id, state]) => ({ entity_id, state, attributes: {} })));
     if (req.url.startsWith('/api/states/')) return json({});
@@ -44,7 +46,7 @@ const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(path.join(tmp, 'claude-args.log'))}, JSON.stringify(a) + '\\n');
 const draft = a[a.indexOf('--permission-mode') + 1] === 'default';
 if (!draft) fs.appendFileSync(${JSON.stringify(path.join(cfg, 'configuration.yaml'))}, 'automation: !include automations.yaml\\n');
-const rundgang = a[a.indexOf('-p') + 1].startsWith('Aufgabe: RUNDGANG');
+const rundgang = /^(Aufgabe: RUNDGANG|Task: INSPECTION)/.test(a[a.indexOf('-p') + 1]);
 if (!draft && !rundgang) { fs.mkdirSync(${JSON.stringify(path.join(cfg, 'zigbee2mqtt'))}, { recursive: true }); fs.writeFileSync(${JSON.stringify(path.join(cfg, 'zigbee2mqtt', 'state.json'))}, String(Date.now())); }
 const out = rundgang
   ? { status: 'entwurf', zusammenfassung: 'Zwei Dinge gefunden.', details: 'Befunde', vorschlaege: [{ titel: 'Batterie Flursensor tauschen', text: 'leer', begruendung: 'sensor.flur_batterie 4 %', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein', handarbeit: true }, { titel: 'Reparatur offen', text: 'x', kategorie: 'unsinn', nutzen: 'mittel', aufwand: 'mittel' }, { titel: 'Batterie  Flursensor TAUSCHEN!', text: 'doppelt', kategorie: 'wartung', nutzen: 'hoch', aufwand: 'klein' }] }
@@ -73,7 +75,7 @@ test.before(async () => {
     HM_STATE: path.join(tmp, 'state.json'), HM_OPTIONS: path.join(tmp, 'options.json'), HM_CLAUDE_BIN: fakeClaude,
     HM_TIME_SCALE: '0.001', HM_MAX_FILE_BYTES: '4000', HM_BASELINE: path.join(tmp, 'baseline.json'), CLAUDE_CODE_OAUTH_TOKEN: 'x',
   });
-  fs.writeFileSync(process.env.HM_OPTIONS, JSON.stringify({ run_times: ['11:00'], intake_todo: '', auto_draft: true }));
+  fs.writeFileSync(process.env.HM_OPTIONS, JSON.stringify({ run_times: ['11:00'], intake_todo: '', auto_draft: true, language: 'de' }));
   mod = require('../server');
   await require('../lib/git').init();
   srv = http.createServer((q, s) => mod.route(q, s));
@@ -278,4 +280,51 @@ test('Eingaben werden geprüft', async () => {
   const st = await get('/api/state');
   assert.ok(st.runs.length >= 3);
   assert.strictEqual(st.logged_in, true);
+});
+
+test('Sprache: auto folgt Home Assistant, Board bekommt das Wörterbuch, Claude die Regeln der Sprache', async () => {
+  const i18n = require('../lib/i18n');
+  try {
+    mod.opts.language = 'auto';
+    for (const [ha, want] of [['de', 'de'], ['en', 'en'], ['fr', 'en'], ['de-CH', 'de']]) {
+      haLanguage = ha;
+      await mod.applyLanguage();
+      assert.strictEqual(i18n.language(), want, `HA-Sprache ${ha}`);
+      const board = await get('/api/i18n');
+      assert.strictEqual(board.lang, want);
+      assert.strictEqual(board.dict['tab.new'], want === 'de' ? 'Neues Ticket' : 'New ticket');
+      assert.ok(!Object.keys(board.dict).some((k) => k.startsWith('prompt.')));
+    }
+    haLanguage = 'de';
+    mod.opts.language = 'en';
+    assert.strictEqual(await mod.applyLanguage(), true, 'Wechsel wird gemeldet');
+    assert.strictEqual(i18n.language(), 'en', 'Option gewinnt gegen Home Assistant');
+    assert.strictEqual(await mod.applyLanguage(), false, 'ohne Wechsel nichts zu tun');
+    const st = await get('/api/state');
+    assert.strictEqual(st.lang, 'en');
+    assert.strictEqual(st.states.rueckfrage, 'Question');
+    assert.strictEqual(st.kategorien.aufraeumen, 'Cleanup');
+    assert.strictEqual(st.actors['Zeitplan'], 'Schedule');
+    assert.strictEqual((await post('/api/tickets', { title: '  ' })).body.error, 'Title missing');
+    assert.strictEqual((await post('/api/tickets/999/action', { action: 'umsetzen' })).body.error, 'Ticket 999 does not exist');
+    const id = (await post('/api/tickets', { title: 'English ticket', draft: false })).body.id;
+    assert.strictEqual((await get(`/api/tickets/${id}`)).actions.find((a) => a.key === 'sofort').label, 'Implement now');
+    const doc = fs.readdirSync(path.join(tmp, 'share', 'tickets')).find((f) => f.includes('english-ticket'));
+    assert.match(fs.readFileSync(path.join(tmp, 'share', 'tickets', doc), 'utf8'), /^State: New/m, 'Ticketdoku in der Sprache');
+    await post(`/api/tickets/${id}/action`, { action: 'verwerfen' });
+
+    const dirs = { work: path.join(tmp, 'rt-work'), home: path.join(tmp, 'rt-home'), share: path.join(tmp, 'rt-share') };
+    mod.writeRuntimeFiles(dirs);
+    assert.match(fs.readFileSync(path.join(dirs.work, 'CLAUDE.md'), 'utf8'), /^# Hausmeister: rules/);
+    assert.match(fs.readFileSync(path.join(dirs.home, '.bash_profile'), 'utf8'), /Hausmeister terminal/);
+    assert.match(fs.readFileSync(path.join(dirs.share, 'WISSEN.md'), 'utf8'), /^# Knowledge about this house/);
+    mod.opts.language = 'de';
+    await mod.applyLanguage();
+    mod.writeRuntimeFiles(dirs);
+    assert.match(fs.readFileSync(path.join(dirs.work, 'CLAUDE.md'), 'utf8'), /^# Hausmeister: Regeln/);
+    assert.match(fs.readFileSync(path.join(dirs.share, 'WISSEN.md'), 'utf8'), /^# Knowledge/, 'vorhandenes Wissen bleibt unangetastet');
+  } finally {
+    mod.opts.language = 'de';
+    i18n.setLanguage('de');
+  }
 });

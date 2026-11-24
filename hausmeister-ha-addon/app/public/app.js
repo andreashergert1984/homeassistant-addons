@@ -6,11 +6,26 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 let state = null;
 let openId = null;
 
+// Texts come from the server (GET api/i18n) in the active language; t() fills {placeholders}.
+let I18N = { lang: 'en', locale: 'en-GB', dict: {} };
+function t(key, vars) {
+  const text = Object.prototype.hasOwnProperty.call(I18N.dict, key) ? I18N.dict[key] : key;
+  return vars ? text.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined || vars[k] === null ? m : String(vars[k]))) : text;
+}
+async function loadI18n() {
+  I18N = await api('api/i18n');
+  document.documentElement.lang = I18N.lang;
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  for (const attr of ['placeholder', 'title', 'aria-label']) {
+    document.querySelectorAll(`[data-i18n-${attr}]`).forEach((el) => { el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`))); });
+  }
+}
+
 const GROUPS = [
-  { title: 'Wartet auf dich', states: ['rueckfrage', 'pruefen', 'fehler', 'entwurf', 'umgesetzt'] },
-  { title: 'In Arbeit und in der Schlange', states: ['in_arbeit', 'umsetzen', 'entwerfen'] },
-  { title: 'Gesammelt', states: ['neu'] },
-  { title: 'Abgeschlossen', states: ['erledigt', 'zurueckgerollt', 'verworfen'], closed: true },
+  { key: 'waiting', states: ['rueckfrage', 'pruefen', 'fehler', 'entwurf', 'umgesetzt'] },
+  { key: 'queue', states: ['in_arbeit', 'umsetzen', 'entwerfen'] },
+  { key: 'collected', states: ['neu'] },
+  { key: 'closed', states: ['erledigt', 'zurueckgerollt', 'verworfen'], closed: true },
 ];
 const TONE = { rueckfrage: 'warn', pruefen: 'bad', fehler: 'bad', entwurf: 'warn', umgesetzt: 'warn', erledigt: 'ok', in_arbeit: 'info', umsetzen: 'info', entwerfen: 'info' };
 
@@ -29,21 +44,21 @@ const ICON = {
   aufraeumen: 'M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6z',
   wartung: 'M22.7 19 13.6 9.9c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4',
 };
-const SOURCE = { todo: ['todo', 'To-do-Liste'], board: ['board', 'Board'], event: ['event', 'Automation'], rundgang: ['rundgang', 'Rundgang'] };
+const SOURCE = { todo: ['todo', 'source.todo'], board: ['board', 'source.board'], event: ['event', 'source.event'], rundgang: ['rundgang', 'source.rundgang'] };
 const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[k]}"/></svg>`;
 
 function fmt(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function ago(iso) {
   if (!iso) return '';
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return 'gerade eben';
-  if (s < 3600) return `vor ${Math.round(s / 60)} Min.`;
-  if (s < 86400) return `vor ${Math.round(s / 3600)} Std.`;
-  if (s < 7 * 86400) { const d = Math.round(s / 86400); return d === 1 ? 'gestern' : `vor ${d} Tagen`; }
+  if (s < 60) return t('time.just_now');
+  if (s < 3600) return t('time.minutes_ago', { n: Math.round(s / 60) });
+  if (s < 86400) return t('time.hours_ago', { n: Math.round(s / 3600) });
+  if (s < 7 * 86400) { const d = Math.round(s / 86400); return d === 1 ? t('time.yesterday') : t('time.days_ago', { n: d }); }
   return fmt(iso);
 }
 
@@ -113,104 +128,109 @@ async function act(btn, fn, okMsg) {
   }
 }
 
-const chip = (t) => `<span class="chip ${TONE[t.state] || ''}">${esc(t.state_label)}</span>`;
-function source(t) {
-  if (t.kind === 'rundgang') return `<span class="src">${svg('rundgang')}Rundgang</span>`;
-  const [icon, label] = SOURCE[t.source] || SOURCE.board;
-  const who = t.created_by && !['To-do-Liste', 'Automation', 'Zeitplan', 'Rundgang', 'unbekannt'].includes(t.created_by) ? ` · ${esc(t.created_by)}` : '';
-  return `<span class="src">${svg(icon)}${label}${who}</span>`;
+// Dictionary texts may mark commands with backticks.
+const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const chip = (x) => `<span class="chip ${TONE[x.state] || ''}">${esc(x.state_label)}</span>`;
+// Stored names like the schedule or the todo list are identifiers; the server sends their labels.
+const actor = (name) => (state && state.actors && state.actors[name]) || name;
+function source(x) {
+  if (x.kind === 'rundgang') return `<span class="src">${svg('rundgang')}${esc(t('source.rundgang'))}</span>`;
+  const [icon, label] = SOURCE[x.source] || SOURCE.board;
+  const who = x.created_by && !(state.quiet_actors || []).includes(x.created_by) ? ` · ${esc(actor(x.created_by))}` : '';
+  return `<span class="src">${svg(icon)}${esc(t(label))}${who}</span>`;
 }
 
 function renderTop() {
   const s = state;
-  $('#sub').textContent = s.logged_in ? `Nächster Lauf ${s.next_run}` : 'Claude ist nicht angemeldet';
-  const queued = s.tickets.filter((t) => t.state === 'entwerfen' || t.state === 'umsetzen').length;
+  $('#sub').textContent = s.logged_in ? t('top.next_run', { when: s.next_run }) : t('top.not_logged_in');
+  const queued = s.tickets.filter((x) => x.state === 'entwerfen' || x.state === 'umsetzen').length;
+  const cur = s.current ? s.current.id : '';
   $('#topactions').innerHTML = s.busy
-    ? `<button id="cancel" class="danger" title="Den laufenden Claude-Aufruf für #${s.current ? s.current.id : ''} abbrechen">Lauf abbrechen</button>`
-    : `<button id="runnow" class="primary" ${queued ? '' : 'disabled'} title="${queued ? `${queued} Ticket(s) in der Schlange jetzt bearbeiten` : 'Nichts in der Schlange'}">${svg('bolt').replace('<svg', '<svg style="width:16px;height:16px;fill:currentColor;vertical-align:-3px"')} <span class="runlabel">Jetzt ausführen${queued ? ` (${queued})` : ''}</span></button>`;
-  if ($('#runnow')) $('#runnow').onclick = (e) => act(e.currentTarget, async () => { await api('api/run', {}); await load(); }, 'Lauf gestartet');
-  if ($('#cancel')) $('#cancel').onclick = (e) => { if (confirm(`Den laufenden Claude-Aufruf für #${s.current ? s.current.id : ''} abbrechen? Das Ticket geht auf „Fehler“ und kann erneut versucht werden.`)) act(e.currentTarget, async () => { await api('api/cancel', {}); await load(); }, 'Abgebrochen'); };
+    ? `<button id="cancel" class="danger" title="${esc(t('top.cancel_title', { id: cur }))}">${esc(t('top.cancel'))}</button>`
+    : `<button id="runnow" class="primary" ${queued ? '' : 'disabled'} title="${esc(queued ? t('top.run_title', { n: queued }) : t('top.run_empty'))}">${svg('bolt').replace('<svg', '<svg style="width:16px;height:16px;fill:currentColor;vertical-align:-3px"')} <span class="runlabel">${esc(t('top.run'))}${queued ? ` (${queued})` : ''}</span></button>`;
+  if ($('#runnow')) $('#runnow').onclick = (e) => act(e.currentTarget, async () => { await api('api/run', {}); await load(); }, t('toast.run_started'));
+  if ($('#cancel')) $('#cancel').onclick = (e) => { if (confirm(t('confirm.cancel', { id: cur }))) act(e.currentTarget, async () => { await api('api/cancel', {}); await load(); }, t('toast.cancelled')); };
 }
 
 function renderLive() {
   const c = state.current;
-  const login = !state.logged_in ? '<div class="box ask"><strong>Claude ist nicht angemeldet.</strong> Im Reiter „Anmeldung“ einloggen, sonst bleiben die Tickets liegen.</div>' : '';
+  const login = !state.logged_in ? `<div class="box ask"><strong>${esc(t('live.not_logged_in'))}</strong> ${esc(t('live.login_hint'))}</div>` : '';
   const wd = state.watchdog && (Date.now() - new Date(state.watchdog.at).getTime()) < 3 * 86400000
-    ? `<div class="box alarm"><strong>Wächter ${ago(state.watchdog.at)}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">Nicht durch den Hausmeister verursacht. Prüfen, ob es gewollt war.</span></div>` : '';
-  // In the open ticket the detail shows the live steps itself; no second strip with "Ansehen".
+    ? `<div class="box alarm"><strong>${esc(t('live.watchdog', { when: ago(state.watchdog.at) }))}</strong><ul>${state.watchdog.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><span class="meta">${esc(t('live.watchdog_hint'))}</span></div>` : '';
+  // In the open ticket the detail shows the live steps itself; no second strip with a "View" button.
   const here = c && openId === c.id && !$('#detail').hidden;
-  const live = c && !here ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet an #${c.id} (${c.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'})</b><span>${esc(c.step || 'startet')}</span></div><button data-open="${c.id}">Ansehen</button></div>` : '';
+  const live = c && !here ? `<div class="live"><span class="pulse"></span><div class="txt"><b>${esc(t('live.working', { id: c.id, phase: t(c.phase === 'umsetzen' ? 'phase.impl' : 'phase.draft') }))}</b><span>${esc(c.step || '')}</span></div><button data-open="${c.id}">${esc(t('live.view'))}</button></div>` : '';
   $('#live').innerHTML = login + wd + live;
   document.querySelectorAll('#live [data-open]').forEach((b) => { b.onclick = () => openTicket(Number(b.dataset.open)); });
 }
 
 function renderStats() {
-  const t = state.tickets;
-  const count = (st) => t.filter((x) => st.includes(x.state)).length;
-  const week = t.filter((x) => x.state === 'erledigt' && Date.now() - new Date(x.updated).getTime() < 7 * 86400000).length;
+  const all = state.tickets;
+  const count = (st) => all.filter((x) => st.includes(x.state)).length;
+  const week = all.filter((x) => x.state === 'erledigt' && Date.now() - new Date(x.updated).getTime() < 7 * 86400000).length;
   const q = state.quota && state.quota.utilization != null ? Math.round(state.quota.utilization * 100) : null;
   const qTone = state.quota_blocked ? 'bad' : q >= 60 ? 'warn' : '';
-  const qTitle = q == null ? 'Wird nach dem nächsten Lauf angezeigt' : `Auslastung des Abos (${state.quota.window}), geplante Läufe pausieren ab ${state.max_quota_percent} %${state.quota.resetsAt ? `, erneuert ${new Date(state.quota.resetsAt * 1000).toLocaleString('de-DE')}` : ''}`;
+  const qTitle = q == null ? t('stats.quota_unknown') : t(state.quota.resetsAt ? 'stats.quota_title_reset' : 'stats.quota_title', { window: state.quota.window, max: state.max_quota_percent, reset: state.quota.resetsAt ? new Date(state.quota.resetsAt * 1000).toLocaleString(I18N.locale) : '' });
   const wait = count(GROUPS[0].states);
   $('#stats').innerHTML = [
-    `<div class="stat ${wait ? 'warn' : ''}"><div class="n">${wait}</div><div class="l">warten auf dich</div></div>`,
-    `<div class="stat"><div class="n">${count(GROUPS[1].states)}</div><div class="l">in Arbeit oder Schlange</div></div>`,
-    `<div class="stat"><div class="n">${week}</div><div class="l">erledigt in 7 Tagen</div></div>`,
-    `<div class="stat" title="${esc(qTitle)}"><div class="n">${q == null ? '–' : `${q} %`}</div><div class="l">Kontingent${state.quota_blocked ? ', Läufe pausiert' : ''}</div><div class="bar"><span class="${qTone}" style="width:${q || 0}%"></span></div></div>`,
+    `<div class="stat ${wait ? 'warn' : ''}"><div class="n">${wait}</div><div class="l">${esc(t('stats.waiting'))}</div></div>`,
+    `<div class="stat"><div class="n">${count(GROUPS[1].states)}</div><div class="l">${esc(t('stats.queue'))}</div></div>`,
+    `<div class="stat"><div class="n">${week}</div><div class="l">${esc(t('stats.done_week'))}</div></div>`,
+    `<div class="stat" title="${esc(qTitle)}"><div class="n">${q == null ? '–' : `${q} %`}</div><div class="l">${esc(t(state.quota_blocked ? 'stats.quota_paused' : 'stats.quota'))}</div><div class="bar"><span class="${qTone}" style="width:${q || 0}%"></span></div></div>`,
   ].join('');
 }
 
 function renderList() {
   const html = GROUPS.map((g) => {
-    const items = state.tickets.filter((t) => g.states.includes(t.state));
+    const items = state.tickets.filter((x) => g.states.includes(x.state));
     if (!items.length) return '';
-    const cards = items.map((t) => `<div class="card ${TONE[t.state] || ''}" data-id="${t.id}">
-      <div class="t"><span class="id">#${t.id}</span><span>${esc(t.title)}</span></div>
-      <div class="row">${chip(t)}${t.direct && ['umsetzen', 'in_arbeit'].includes(t.state) ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">${ago(t.updated)}</span></div>
-      ${t.summary ? `<div class="sum">${esc(t.summary)}</div>` : ''}</div>`).join('');
-    const head = `<div class="ghead">${g.title}<span class="count">${items.length}</span></div>`;
-    return g.closed ? `<details class="group" data-k="list-${g.title}"><summary>${head}</summary>${cards}</details>` : `<div class="group">${head}${cards}</div>`;
+    const cards = items.map((x) => `<div class="card ${TONE[x.state] || ''}" data-id="${x.id}">
+      <div class="t"><span class="id">#${x.id}</span><span>${esc(x.title)}</span></div>
+      <div class="row">${chip(x)}${x.direct && ['umsetzen', 'in_arbeit'].includes(x.state) ? `<span class="chip info">${svg('bolt')}${esc(t('chip.now'))}</span>` : ''}${source(x)}<span class="meta">${ago(x.updated)}</span></div>
+      ${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ''}</div>`).join('');
+    const head = `<div class="ghead">${esc(t(`group.${g.key}`))}<span class="count">${items.length}</span></div>`;
+    return g.closed ? `<details class="group" data-k="list-${g.key}"><summary>${head}</summary>${cards}</details>` : `<div class="group">${head}${cards}</div>`;
   }).join('');
-  $('#list').innerHTML = html || `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Alles erledigt.</strong></div><div class="hint">Neue Wünsche auf die To-do-Liste „Hausmeister“ schreiben oder hier anlegen.</div></div>`;
+  $('#list').innerHTML = html || `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>${esc(t('list.empty'))}</strong></div><div class="hint">${esc(t('list.empty_hint'))}</div></div>`;
   document.querySelectorAll('.card').forEach((c) => { c.onclick = () => openTicket(Number(c.dataset.id)); });
   restoreDetails($('#list'));
 }
 
 // Progress of a ticket: collected, draft, approval, implementation, acceptance.
-function stepper(t) {
-  const steps = ['Eingang', 'Entwurf', 'Freigabe', 'Umsetzung', 'Abnahme'];
-  const phase = t.state === 'in_arbeit' ? (t.phase === 'umsetzen' ? 'umsetzen' : 'entwerfen') : t.state;
-  const at = { neu: [0, 'now'], entwerfen: [1, 'now'], rueckfrage: [t.phase === 'umsetzen' ? 3 : 1, 'wait'], entwurf: [2, 'wait'], umsetzen: [3, 'now'], fehler: [t.phase === 'umsetzen' ? 3 : 1, 'wait'], umgesetzt: [4, 'wait'], pruefen: [4, 'wait'], erledigt: [5, ''] }[phase];
+function stepper(tk) {
+  const steps = ['intake', 'draft', 'approval', 'impl', 'acceptance'].map((k) => t(`stepper.${k}`));
+  const phase = tk.state === 'in_arbeit' ? (tk.phase === 'umsetzen' ? 'umsetzen' : 'entwerfen') : tk.state;
+  const at = { neu: [0, 'now'], entwerfen: [1, 'now'], rueckfrage: [tk.phase === 'umsetzen' ? 3 : 1, 'wait'], entwurf: [2, 'wait'], umsetzen: [3, 'now'], fehler: [tk.phase === 'umsetzen' ? 3 : 1, 'wait'], umgesetzt: [4, 'wait'], pruefen: [4, 'wait'], erledigt: [5, ''] }[phase];
   if (!at) return '';
-  const skip = t.direct;
+  const skip = tk.direct;
   return `<div class="stepper">${steps.map((name, i) => {
     let cls = i < at[0] ? 'done' : i === at[0] ? at[1] : '';
     if (skip && (i === 1 || i === 2) && i !== at[0]) cls = 'skip';
     const mark = cls === 'done' ? '✓' : String(i + 1);
-    return `<div class="st ${cls}"><div class="c">${mark}</div><div class="l">${name}</div></div>`;
-  }).join('')}</div>${at[0] < 5 ? `<div class="stepnow">Schritt ${at[0] + 1} von 5: ${steps[at[0]]}</div>` : ''}`;
+    return `<div class="st ${cls}"><div class="c">${mark}</div><div class="l">${esc(name)}</div></div>`;
+  }).join('')}</div>${at[0] < 5 ? `<div class="stepnow">${esc(t('stepper.now', { n: at[0] + 1, step: steps[at[0]] }))}</div>` : ''}`;
 }
 
 function resultItem(r) {
-  const title = r.phase === 'umsetzen' ? 'Umsetzung' : r.phase === 'rueckrollung' ? 'Rückrollung' : 'Entwurf';
+  const title = t(r.phase === 'umsetzen' ? 'phase.impl' : r.phase === 'rueckrollung' ? 'phase.rollback' : 'phase.draft');
   const alarm = r.watch && r.watch.length;
   const tone = alarm || r.kind === 'fehler' ? 'bad' : r.kind === 'rueckfrage' ? 'warn' : r.kind === 'umgesetzt' || r.kind === 'zurueckgerollt' ? 'ok' : '';
   const files = [...new Set([...(r.changed || []), ...(r.api || [])])];
   return `<div class="tl ${tone}"><div class="box ${alarm ? 'alarm' : ''}">
-    <div class="head"><strong>${title}</strong><span class="meta">${fmt(r.at)}${r.turns ? ` · ${r.turns} Schritte` : ''}</span></div>
+    <div class="head"><strong>${esc(title)}</strong><span class="meta">${fmt(r.at)}${r.turns ? ` · ${esc(t('result.turns', { n: r.turns }))}` : ''}</span></div>
     ${r.summary ? `<div class="lead">${esc(r.summary)}</div>` : ''}
-    ${r.question ? `<div class="box ask"><strong>Rückfrage:</strong> ${esc(r.question)}</div>` : ''}
+    ${r.question ? `<div class="box ask"><strong>${esc(t('result.question'))}</strong> ${esc(r.question)}</div>` : ''}
     ${r.details ? `<div class="md">${md(r.details)}</div>` : ''}
-    ${r.test ? `<h3>So prüfst du es</h3><div class="md">${md(r.test)}</div>` : ''}
+    ${r.test ? `<h3>${esc(t('result.test'))}</h3><div class="md">${md(r.test)}</div>` : ''}
     ${files.length ? `<div class="files">${files.map((f) => `<code>${esc(f)}</code>`).join('')}</div>` : ''}
-    ${r.changed_by_itself && r.changed_by_itself.length ? `<details data-k="noise-${esc(r.at)}"><summary>Von Integrationen nebenbei geändert, wird nicht zurückgerollt (${r.changed_by_itself.length})</summary><div class="files">${r.changed_by_itself.map((f) => `<code>${esc(f)}</code>`).join('')}</div></details>` : ''}
-    ${alarm ? `<h3>Wächter</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
-    ${r.log_errors && r.log_errors.length ? `<h3>Neue Fehler im HA-Log</h3><p class="meta">Prüfen, ob sie zur Änderung gehören.</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
-    ${r.created && r.created.length ? `<p>Neue Tickets aus dem Rundgang: ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
-    ${r.suggestions ? `<p>${r.suggestions.length} neue Vorschläge, siehe Reiter „Vorschläge“.</p>` : ''}
-    ${r.message ? `<p class="meta">Meldung: ${esc(r.message)}</p>` : ''}
-    ${r.backup_error ? `<p class="meta">HA-Sicherung vorher nicht möglich: ${esc(r.backup_error)}</p>` : ''}
-    ${r.steps && r.steps.length ? `<details data-k="steps-${esc(r.at)}"><summary>Was Claude getan hat (${r.steps.length} Schritte)</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
+    ${r.changed_by_itself && r.changed_by_itself.length ? `<details data-k="noise-${esc(r.at)}"><summary>${esc(t('result.by_itself', { n: r.changed_by_itself.length }))}</summary><div class="files">${r.changed_by_itself.map((f) => `<code>${esc(f)}</code>`).join('')}</div></details>` : ''}
+    ${alarm ? `<h3>${esc(t('result.watch'))}</h3><ul>${r.watch.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
+    ${r.log_errors && r.log_errors.length ? `<h3>${esc(t('result.log_errors'))}</h3><p class="meta">${esc(t('result.log_errors_hint'))}</p><ul>${r.log_errors.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
+    ${r.created && r.created.length ? `<p>${esc(t('result.created'))} ${r.created.map((id) => `<a href="#" data-open="${id}">#${id}</a>`).join(', ')}</p>` : ''}
+    ${r.suggestions ? `<p>${esc(t('result.suggestions', { n: r.suggestions.length }))}</p>` : ''}
+    ${r.message ? `<p class="meta">${esc(t('result.message', { message: r.message }))}</p>` : ''}
+    ${r.backup_error ? `<p class="meta">${esc(t('result.backup_error', { message: r.backup_error }))}</p>` : ''}
+    ${r.steps && r.steps.length ? `<details data-k="steps-${esc(r.at)}"><summary>${esc(t('result.steps', { n: r.steps.length }))}</summary><ol class="steps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}
   </div></div>`;
 }
 
@@ -219,29 +239,29 @@ const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').
 async function openTicket(id, fromHistory) {
   if (!fromHistory && openId !== id) { try { history.pushState({ ticket: id }, ''); } catch { /* sandboxed */ } }
   openId = id;
-  const t = await api(`api/tickets/${id}`);
-  const last = t.results[t.results.length - 1];
-  const needs = t.actions.some((a) => a.comment);
-  const primary = (k) => k === 'umsetzen' || k === 'abnehmen' || k === 'antworten' || (k === 'sofort' && !t.actions.some((a) => a.key === 'umsetzen') && t.state !== 'rueckfrage');
-  const running = state.current && state.current.id === t.id;
-  $('#detail').innerHTML = `<button class="back">← Alle Tickets</button>
+  const tk = await api(`api/tickets/${id}`);
+  const last = tk.results[tk.results.length - 1];
+  const needs = tk.actions.some((a) => a.comment);
+  const primary = (k) => k === 'umsetzen' || k === 'abnehmen' || k === 'antworten' || (k === 'sofort' && !tk.actions.some((a) => a.key === 'umsetzen') && tk.state !== 'rueckfrage');
+  const running = state.current && state.current.id === tk.id;
+  $('#detail').innerHTML = `<button class="back">← ${esc(t('detail.back'))}</button>
     <div class="dhead">
-      <h2><span class="meta">#${t.id}</span> ${esc(t.title)}</h2>
-      <div class="row">${chip(t)}${t.direct ? `<span class="chip info">${svg('bolt')}sofort</span>` : ''}${source(t)}<span class="meta">angelegt ${ago(t.created)}</span></div>
-      ${t.text ? `<div class="desc md">${md(t.text)}</div>` : ''}
-      ${t.kind === 'rundgang' ? '' : stepper(t)}
+      <h2><span class="meta">#${tk.id}</span> ${esc(tk.title)}</h2>
+      <div class="row">${chip(tk)}${tk.direct ? `<span class="chip info">${svg('bolt')}${esc(t('chip.now'))}</span>` : ''}${source(tk)}<span class="meta">${esc(t('detail.created', { when: ago(tk.created) }))}</span></div>
+      ${tk.text ? `<div class="desc md">${md(tk.text)}</div>` : ''}
+      ${tk.kind === 'rundgang' ? '' : stepper(tk)}
     </div>
-    ${t.state === 'rueckfrage' && last && last.question ? `<div class="box ask"><strong>Claude fragt:</strong> ${esc(last.question)}<div class="meta">Antwort unten eintragen und „Antwort senden“ drücken.</div></div>` : ''}
-    ${running ? `<div class="live"><span class="pulse"></span><div class="txt"><b>Claude arbeitet gerade</b><span>${esc(state.current.step || '')}</span></div></div><ol class="steps">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol>` : ''}
-    ${t.actions.length || t.can_rollback || !running ? `<div class="box composer">
-      <textarea id="comment" rows="2" placeholder="${needs ? 'Antwort oder was anders sein soll' : 'Kommentar (optional)'}"></textarea>
-      <div class="row"><div class="actionbar"> ${t.actions.map((a) => `<button data-a="${a.key}" ${a.comment ? 'data-needs="1"' : ''} class="${primary(a.key) ? 'primary' : a.key === 'sofort' ? 'soft' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
-        ${t.can_rollback ? '<button id="rollback" class="danger">Zurückrollen</button>' : ''}</div>
-        ${t.state === 'rueckfrage' ? '' : '<button id="addcomment">Nur kommentieren</button>'}</div>
+    ${tk.state === 'rueckfrage' && last && last.question ? `<div class="box ask"><strong>${esc(t('detail.claude_asks'))}</strong> ${esc(last.question)}<div class="meta">${esc(t('detail.answer_hint'))}</div></div>` : ''}
+    ${running ? `<div class="live"><span class="pulse"></span><div class="txt"><b>${esc(t('detail.working'))}</b><span>${esc(state.current.step || '')}</span></div></div><ol class="steps">${state.current.steps.map((x) => `<li>${esc(x.text)}</li>`).join('')}</ol>` : ''}
+    ${tk.actions.length || tk.can_rollback || !running ? `<div class="box composer">
+      <textarea id="comment" rows="2" placeholder="${esc(t(needs ? 'detail.comment_needed_ph' : 'detail.comment_ph'))}"></textarea>
+      <div class="row"><div class="actionbar"> ${tk.actions.map((a) => `<button data-a="${a.key}" ${a.comment ? 'data-needs="1"' : ''} class="${primary(a.key) ? 'primary' : a.key === 'sofort' ? 'soft' : a.key === 'verwerfen' ? 'danger' : ''}">${esc(a.label)}</button>`).join('')}
+        ${tk.can_rollback ? `<button id="rollback" class="danger">${esc(t('detail.rollback'))}</button>` : ''}</div>
+        ${tk.state === 'rueckfrage' ? '' : `<button id="addcomment">${esc(t('detail.comment_only'))}</button>`}</div>
     </div>` : ''}
-    ${t.comments.length ? `<div class="sec">Kommentare</div>${t.comments.map((c) => `<div class="comment"><div class="avatar">${esc(initials(c.by))}</div><div class="bubble"><div class="meta">${esc(c.by)} · ${ago(c.at)}</div>${esc(c.text)}</div></div>`).join('')}` : ''}
-    ${t.results.length ? `<div class="sec">Verlauf der Arbeit</div><div class="timeline">${[...t.results].reverse().map(resultItem).join('')}</div>` : ''}
-    <details data-k="history"><summary>Alle Zustandswechsel</summary><table>${t.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(h.by)}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
+    ${tk.comments.length ? `<div class="sec">${esc(t('detail.comments'))}</div>${tk.comments.map((c) => `<div class="comment"><div class="avatar">${esc(initials(actor(c.by)))}</div><div class="bubble"><div class="meta">${esc(actor(c.by))} · ${ago(c.at)}</div>${esc(c.text)}</div></div>`).join('')}` : ''}
+    ${tk.results.length ? `<div class="sec">${esc(t('detail.work'))}</div><div class="timeline">${[...tk.results].reverse().map(resultItem).join('')}</div>` : ''}
+    <details data-k="history"><summary>${esc(t('detail.history'))}</summary><table>${tk.history.map((h) => `<tr><td>${fmt(h.at)}</td><td>${esc(actor(h.by))}</td><td>${esc(state.states[h.to] || h.to)}${h.note ? `<br><span class="meta">${esc(h.note)}</span>` : ''}</td></tr>`).join('')}</table></details>`;
   $('#list').hidden = true;
   $('#stats').hidden = true;
   $('#detail').hidden = false;
@@ -252,19 +272,16 @@ async function openTicket(id, fromHistory) {
     b.onclick = async () => {
       const a = b.dataset.a;
       if (b.disabled) return;
-      if (a === 'sofort' && !confirm(t.state === 'entwurf' || t.state === 'umsetzen'
-        ? 'Claude setzt den Entwurf jetzt sofort um. Vorher wird gesichert. Los?'
-        : 'Claude plant und setzt jetzt sofort um, ohne dass du vorher einen Entwurf siehst. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
-      if (a === 'umsetzen' && !confirm('Claude setzt den Entwurf beim nächsten Lauf um. Vorher wird gesichert. Freigeben?')) return;
-      if (a === 'verwerfen' && !confirm('Ticket verwerfen?')) return;
-      const done = { umsetzen: 'Freigegeben, wird beim nächsten Lauf umgesetzt', sofort: 'Claude legt jetzt los', entwerfen: 'Neuer Entwurf beim nächsten Lauf', antworten: 'Antwort gesendet', nachbessern: 'Nachbesserung angefordert', abnehmen: 'Abgenommen', verwerfen: 'Verworfen', wiederholen: 'Wird erneut versucht', zurueckstellen: 'Zurück auf Neu' };
-      await act(b, async () => { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment') ? $('#comment').value : '' }); delete drafts[id]; await load(); await openTicket(id); }, done[a]);
+      if (a === 'sofort' && !confirm(t(tk.state === 'entwurf' || tk.state === 'umsetzen' ? 'confirm.now_draft' : 'confirm.now_direct'))) return;
+      if (a === 'umsetzen' && !confirm(t('confirm.approve'))) return;
+      if (a === 'verwerfen' && !confirm(t('confirm.discard'))) return;
+      await act(b, async () => { await api(`api/tickets/${id}/action`, { action: a, comment: $('#comment') ? $('#comment').value : '' }); delete drafts[id]; await load(); await openTicket(id); }, t(`toast.action.${a}`));
     };
   });
   const ta = $('#comment');
   const sync = () => {
     const has = !!(ta && ta.value.trim());
-    document.querySelectorAll('#detail [data-a]').forEach((b) => { if (b.dataset.needs) { b.disabled = !has; b.title = has ? '' : 'Erst oben eine Antwort oder einen Wunsch eintragen'; } });
+    document.querySelectorAll('#detail [data-a]').forEach((b) => { if (b.dataset.needs) { b.disabled = !has; b.title = has ? '' : t('detail.needs_text'); } });
     if ($('#addcomment')) $('#addcomment').disabled = !has;
   };
   if (ta) {
@@ -272,12 +289,12 @@ async function openTicket(id, fromHistory) {
     ta.oninput = () => { drafts[id] = ta.value; sync(); };
     sync();
   }
-  if ($('#addcomment')) $('#addcomment').onclick = (e) => act(e.currentTarget, async () => { await api(`api/tickets/${id}/comment`, { text: ta.value }); delete drafts[id]; await openTicket(id); }, 'Kommentar gespeichert');
+  if ($('#addcomment')) $('#addcomment').onclick = (e) => act(e.currentTarget, async () => { await api(`api/tickets/${id}/comment`, { text: ta.value }); delete drafts[id]; await openTicket(id); }, t('toast.comment_saved'));
   restoreDetails($('#detail'));
   if ($('#rollback')) {
     $('#rollback').onclick = async () => {
-      if (!confirm('Die Dateien, die diese Umsetzung geändert hat, auf den Stand davor zurücksetzen? Dafür wird Home Assistant neu gestartet (bei Dashboards und Helfern kurz gestoppt).')) return;
-      await act($('#rollback'), async () => { await api(`api/tickets/${id}/rollback`, {}); await load(); await openTicket(id); }, 'Zurückgerollt');
+      if (!confirm(t('confirm.rollback'))) return;
+      await act($('#rollback'), async () => { await api(`api/tickets/${id}/rollback`, {}); await load(); await openTicket(id); }, t('toast.rolled_back'));
     };
   }
 }
@@ -301,46 +318,46 @@ function renderSuggestions() {
   c.hidden = !open.length;
   c.textContent = open.length;
   $('#inspectbox').innerHTML = state.inspecting
-    ? '<div class="live" style="margin:0"><span class="pulse"></span><div class="txt"><b>Schaut sich gerade um</b><span>Das dauert ein paar Minuten.</span></div></div>'
-    : `<button id="inspect" class="primary big">${svg('rundgang').replace('<svg', '<svg style="width:18px;height:18px;fill:currentColor;vertical-align:-4px"')} Jetzt umschauen</button>`;
+    ? `<div class="live" style="margin:0"><span class="pulse"></span><div class="txt"><b>${esc(t('sug.inspecting'))}</b><span>${esc(t('sug.inspecting_hint'))}</span></div></div>`
+    : `<button id="inspect" class="primary big">${svg('rundgang').replace('<svg', '<svg style="width:18px;height:18px;fill:currentColor;vertical-align:-4px"')} ${esc(t('sug.inspect'))}</button>`;
   if ($('#inspect')) {
     $('#inspect').onclick = async () => {
-      if (!confirm('Der Hausmeister schaut sich jetzt die ganze Installation an (nur lesend). Das braucht einige Minuten und etwas Kontingent. Los?')) return;
-      await act($('#inspect'), async () => { await api('api/inspect', {}); await load(); }, 'Der Hausmeister schaut sich um');
+      if (!confirm(t('confirm.inspect'))) return;
+      await act($('#inspect'), async () => { await api('api/inspect', {}); await load(); }, t('toast.inspecting'));
     };
   }
   const card = (x, decided) => {
     const cat = state.kategorien[x.category] || x.category;
     const tone = x.benefit === 'hoch' ? 'ok' : '';
-    const after = x.state === 'uebernommen' ? `<span class="chip ok">${svg('check')}als Ticket <a href="#" data-open="${x.ticket}">#${x.ticket}</a></span>`
-      : x.state === 'abgelehnt' ? '<span class="chip">nicht nötig</span> <button class="ghost" data-sug="wieder">Zurückholen</button>'
-        : x.state === 'erledigt' ? `<span class="chip ok">${svg('check')}selbst erledigt</span> <button class="ghost" data-sug="wieder">Zurückholen</button>` : '';
+    const btn = (cls, a, key) => `<button class="${cls}" data-sug="${a}">${esc(t(key))}</button>`;
+    const after = x.state === 'uebernommen' ? `<span class="chip ok">${svg('check')}${esc(t('sug.as_ticket_chip'))} <a href="#" data-open="${x.ticket}">#${x.ticket}</a></span>`
+      : x.state === 'abgelehnt' ? `<span class="chip">${esc(t('sug.declined_chip'))}</span> ${btn('ghost', 'wieder', 'sug.restore')}`
+        : x.state === 'erledigt' ? `<span class="chip ok">${svg('check')}${esc(t('sug.done_chip'))}</span> ${btn('ghost', 'wieder', 'sug.restore')}` : '';
     const buttons = x.manual
-      ? '<button class="primary" data-sug="erledigt">Erledigt</button><button class="ghost" data-sug="sammeln">Als Ticket merken</button><button class="ghost" data-sug="ablehnen">Nicht nötig</button>'
-      : '<button class="primary" data-sug="entwurf">Als Ticket</button><button class="soft" data-sug="sofort">Sofort umsetzen</button><button class="ghost" data-sug="sammeln">Nur merken</button><button class="ghost" data-sug="ablehnen">Nicht nötig</button>';
+      ? btn('primary', 'erledigt', 'sug.done') + btn('ghost', 'sammeln', 'sug.keep_ticket') + btn('ghost', 'ablehnen', 'sug.decline')
+      : btn('primary', 'entwurf', 'sug.as_ticket') + btn('soft', 'sofort', 'sug.now') + btn('ghost', 'sammeln', 'sug.keep') + btn('ghost', 'ablehnen', 'sug.decline');
     return `<div class="sug cat-${esc(x.category)} ${decided ? 'done-sug' : ''}" data-id="${x.id}">
       <div class="ic">${svg(ICON[x.category] ? x.category : 'wartung')}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="row"><span class="chip">${esc(cat)}</span><span class="chip ${tone}">Nutzen ${esc(x.benefit)}</span><span class="chip">Aufwand ${esc(x.effort)}</span>${x.manual ? '<span class="chip warn">machst du selbst</span>' : ''}<span class="meta">${ago(x.created)}</span></div>
+      <div class="row"><span class="chip">${esc(cat)}</span><span class="chip ${tone}">${esc(t('sug.benefit', { level: t(`level.${x.benefit}`) }))}</span><span class="chip">${esc(t('sug.effort', { level: t(`level.${x.effort}`) }))}</span>${x.manual ? `<span class="chip warn">${esc(t('sug.manual'))}</span>` : ''}<span class="meta">${ago(x.created)}</span></div>
       ${x.text ? `<div class="md">${md(x.text)}</div>` : ''}
-      ${x.reason ? `<div class="why"><strong>Warum:</strong> ${esc(x.reason)}</div>` : ''}
+      ${x.reason ? `<div class="why"><strong>${esc(t('sug.why'))}</strong> ${esc(x.reason)}</div>` : ''}
       <div class="actionbar">${decided ? after : buttons}</div>
     </div></div>`;
   };
   $('#suggestions').innerHTML = (open.length ? open.map((x) => card(x, false)).join('')
-    : `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>Keine offenen Vorschläge.</strong></div><div class="hint">„Jetzt umschauen“ starten oder im Rundgang regelmäßig suchen lassen (Einstellung inspection_day).</div></div>`)
-    + (done.length ? `<details class="group" data-k="sug-done"><summary><div class="ghead">Entschieden<span class="count">${done.length}</span></div></summary>${done.map((x) => card(x, true)).join('')}</details>` : '');
+    : `<div class="empty"><svg class="logo" viewBox="0 0 24 24"><path d="${ICON.check}"/></svg><div><strong>${esc(t('sug.empty'))}</strong></div><div class="hint">${esc(t('sug.empty_hint'))}</div></div>`)
+    + (done.length ? `<details class="group" data-k="sug-done"><summary><div class="ghead">${esc(t('sug.decided'))}<span class="count">${done.length}</span></div></summary>${done.map((x) => card(x, true)).join('')}</details>` : '');
   document.querySelectorAll('#suggestions [data-sug]').forEach((b) => {
     b.onclick = async () => {
       const id = b.closest('.sug').dataset.id;
       const a = b.dataset.sug;
-      if (a === 'sofort' && !confirm('Claude plant und setzt diesen Vorschlag jetzt um, ohne Entwurf zur Freigabe. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
-      const msg = { entwurf: 'Als Ticket übernommen', sofort: 'Claude legt jetzt los', sammeln: 'Gemerkt, steht unter Tickets', ablehnen: 'Wird nicht wieder vorgeschlagen', wieder: 'Wieder offen', erledigt: 'Als erledigt vermerkt' };
+      if (a === 'sofort' && !confirm(t('confirm.sug_now'))) return;
       await act(b, async () => {
         const r = await api(`api/suggestions/${id}`, { action: a });
         await load();
         if (r.ticket && a !== 'sammeln') { showTab('tickets'); await openTicket(r.ticket); }
-      }, msg[a]);
+      }, t(`toast.sug.${a}`));
     };
   });
   restoreDetails($('#suggestions'));
@@ -348,8 +365,8 @@ function renderSuggestions() {
 }
 
 function renderRuns() {
-  const kind = { entwurf: 'Entwurf fertig', umgesetzt: 'umgesetzt', rueckfrage: 'Rückfrage', fehler: 'Fehler', kontingent: 'Kontingent erschöpft', anmeldung: 'Anmeldung fehlt' };
-  $('#runs').innerHTML = `<h2>Läufe</h2>${state.runs.length ? `<table><tr><th>Wann</th><th>Anlass</th><th>Ergebnis</th></tr>${state.runs.map((r) => `<tr><td>${fmt(r.at)}</td><td>${esc(r.reason)}${r.by && r.by !== 'Zeitplan' ? `<br><span class="meta">${esc(r.by)}</span>` : ''}</td><td>${r.tickets.map((x) => `<a href="#" data-open="${x.id}">#${x.id}</a> ${esc(x.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf')}: ${esc(kind[x.kind] || x.kind)}`).join('<br>')}${r.note ? `<span class="meta">${esc(r.note)}</span>` : ''}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Läufe.</p>'}`;
+  const kind = (k) => (I18N.dict[`kind.${k}`] !== undefined ? t(`kind.${k}`) : k);
+  $('#runs').innerHTML = `<h2>${esc(t('runs.heading'))}</h2>${state.runs.length ? `<table><tr><th>${esc(t('table.when'))}</th><th>${esc(t('table.reason'))}</th><th>${esc(t('runs.result'))}</th></tr>${state.runs.map((r) => `<tr><td>${fmt(r.at)}</td><td>${esc(r.reason_label || r.reason)}${r.by && r.by !== state.schedule_actor ? `<br><span class="meta">${esc(r.by_label || r.by)}</span>` : ''}</td><td>${r.tickets.map((x) => `<a href="#" data-open="${x.id}">#${x.id}</a> ${esc(t(x.phase === 'umsetzen' ? 'phase.impl' : 'phase.draft'))}: ${esc(kind(x.kind))}`).join('<br>')}${r.note ? `<span class="meta">${esc(r.note)}</span>` : ''}</td></tr>`).join('')}</table>` : `<p class="hint">${esc(t('runs.empty'))}</p>`}`;
   document.querySelectorAll('#runs [data-open]').forEach((a) => {
     a.onclick = (e) => { e.preventDefault(); showTab('tickets'); openTicket(Number(a.dataset.open)); };
   });
@@ -358,14 +375,14 @@ function renderRuns() {
 async function renderBackups() {
   try {
     const list = await api('api/backups');
-    $('#backups').innerHTML = list.length ? `<table><tr><th>Wann</th><th>Anlass</th><th></th></tr>${list.map((b) => `<tr><td>${fmt(b.at)}</td><td>${esc(b.msg)}</td><td class="meta">${esc(b.id.slice(0, 8))}</td></tr>`).join('')}</table>` : '<p class="hint">Noch keine Sicherung.</p>';
+    $('#backups').innerHTML = list.length ? `<table><tr><th>${esc(t('table.when'))}</th><th>${esc(t('table.reason'))}</th><th></th></tr>${list.map((b) => `<tr><td>${fmt(b.at)}</td><td>${esc(b.msg)}</td><td class="meta">${esc(b.id.slice(0, 8))}</td></tr>`).join('')}</table>` : `<p class="hint">${esc(t('backups.empty'))}</p>`;
   } catch (e) { $('#backups').textContent = e.message; }
 }
 
 function renderLogin() {
   $('#loginhint').innerHTML = state.logged_in
-    ? '<h2>Anmeldung</h2><p>Claude ist angemeldet. Das Terminal brauchst du nur, um die Anmeldung zu erneuern oder etwas nachzusehen.</p>'
-    : '<h2>Bei Claude anmelden</h2><ol><li>Im Terminal unten <code>claude</code> eingeben, dann <code>/login</code>.</li><li>„Claude account with subscription“ wählen und den Link im Browser öffnen.</li><li>Den Code zurück ins Terminal kopieren, dann mit <code>/exit</code> beenden.</li></ol>';
+    ? `<h2>${esc(t('login.heading'))}</h2><p>${esc(t('login.ok'))}</p>`
+    : `<h2>${esc(t('login.heading_todo'))}</h2><ol><li>${inline(t('login.step1'))}</li><li>${inline(t('login.step2'))}</li><li>${inline(t('login.step3'))}</li></ol>`;
   if (!$('#term').src) $('#term').src = 'terminal/';
 }
 
@@ -373,11 +390,13 @@ let offline = false;
 async function load() {
   try {
     state = await api('api/state');
-    if (offline) { offline = false; toast('Wieder verbunden', 'ok'); }
+    if (offline) { offline = false; toast(t('toast.online'), 'ok'); }
   } catch (e) {
-    if (!offline) { offline = true; toast(`Keine Verbindung zum Hausmeister: ${e.message}`, 'bad'); }
+    if (!offline) { offline = true; toast(t('toast.offline', { message: e.message }), 'bad'); }
     throw e;
   }
+  // The language follows Home Assistant and can change while the board is open.
+  if (state.lang && state.lang !== I18N.lang) await loadI18n();
   renderTop();
   renderLive();
   renderStats();
@@ -401,16 +420,16 @@ $('#newform').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
   try {
-    if (f.elements.mode.value === 'sofort' && !confirm('Claude plant und setzt sofort um, ohne Entwurf zur Freigabe. Vorher wird gesichert, danach prüfen die Wächter. Los?')) return;
-    const t = await api('api/tickets', { title: f.elements.title.value, text: f.elements.text.value, mode: f.elements.mode.value });
+    if (f.elements.mode.value === 'sofort' && !confirm(t('confirm.new_now'))) return;
+    const created = await api('api/tickets', { title: f.elements.title.value, text: f.elements.text.value, mode: f.elements.mode.value });
     f.reset();
     await load();
     showTab('tickets');
-    await openTicket(t.id);
+    await openTicket(created.id);
   } catch (err) { toast(err.message, 'bad'); }
 };
 
-load().catch((e) => { $('#list').textContent = e.message; });
+loadI18n().catch(() => {}).then(load).catch((e) => { $('#list').textContent = e.message; });
 // Refresh: every 4 s while Claude works (live steps), otherwise every 15 s.
 function refresh() {
   const next = () => setTimeout(refresh, state && state.busy ? 4000 : 15000);

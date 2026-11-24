@@ -4,7 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { STATES, slug, sameKey, KATEGORIEN, isVolatile } = require('./logic');
+const { stateLabel, slug, sameKey, CATEGORY_KEYS, isVolatile, ACTOR } = require('./logic');
+const i18n = require('./i18n');
 
 class Store {
   constructor(file, docDir) {
@@ -25,7 +26,7 @@ class Store {
     }
     // A restart in the middle of a run leaves tickets "in_arbeit": hand them back to the queue.
     for (const t of this.data.tickets) {
-      if (t.state === 'in_arbeit') this._move(t, t.phase || 'entwerfen', 'Hausmeister', 'Lauf wurde unterbrochen (Neustart), Ticket wieder eingereiht');
+      if (t.state === 'in_arbeit') this._move(t, t.phase || 'entwerfen', ACTOR.caretaker, i18n.t('history.interrupted'));
     }
     this.save();
   }
@@ -40,17 +41,17 @@ class Store {
 
   get(id) {
     const t = this.data.tickets.find((x) => x.id === Number(id));
-    if (!t) throw new Error(`Ticket ${id} gibt es nicht`);
+    if (!t) throw new Error(i18n.t('err.ticket_missing', { id }));
     return t;
   }
 
   create({ title, text, by, state = 'neu', source = 'board', direct = false, kind = 'ticket' }) {
     title = String(title || '').trim();
-    if (!title) throw new Error('Titel fehlt');
+    if (!title) throw new Error(i18n.t('err.title_missing'));
     const t = {
       id: this.data.next_id++, title: title.slice(0, 200), text: String(text || '').trim(), state,
-      phase: ['entwerfen', 'umsetzen'].includes(state) ? state : null, created: this.now(), updated: this.now(), created_by: by || 'unbekannt', source,
-      comments: [], history: [{ at: this.now(), to: state, by: by || 'unbekannt' }], results: [],
+      phase: ['entwerfen', 'umsetzen'].includes(state) ? state : null, created: this.now(), updated: this.now(), created_by: by || ACTOR.unknown, source,
+      comments: [], history: [{ at: this.now(), to: state, by: by || ACTOR.unknown }], results: [],
       session_id: null, snapshot: null, watch: null, direct: !!direct, kind,
     };
     this.data.tickets.push(t);
@@ -80,7 +81,7 @@ class Store {
   // Suggestions from an inspection: "what would I change". Titles already open,
   // taken over or declined are not added again.
   knownSuggestions() {
-    return (this.data.suggestions || []).map((x) => `${x.title}${x.state === 'abgelehnt' ? ' (abgelehnt)' : ''}`);
+    return (this.data.suggestions || []).map((x) => (x.state === 'abgelehnt' ? i18n.t('prompt.declined_mark', { title: x.title }) : x.title));
   }
 
   addSuggestions(list, fromTicket) {
@@ -94,7 +95,7 @@ class Store {
       seen.add(sameKey(title));
       const x = {
         id: this.data.next_suggestion++, title, text: String(p.text || '').trim(), reason: String(p.begruendung || '').trim(),
-        category: KATEGORIEN[p.kategorie] ? p.kategorie : 'wartung', benefit: ['hoch', 'mittel', 'gering'].includes(p.nutzen) ? p.nutzen : 'mittel',
+        category: CATEGORY_KEYS.includes(p.kategorie) ? p.kategorie : 'wartung', benefit: ['hoch', 'mittel', 'gering'].includes(p.nutzen) ? p.nutzen : 'mittel',
         effort: ['klein', 'mittel', 'gross'].includes(p.aufwand) ? p.aufwand : 'mittel', manual: p.handarbeit === true, state: 'offen', created: this.now(), from: fromTicket, ticket: null,
       };
       this.data.suggestions.push(x);
@@ -106,7 +107,7 @@ class Store {
 
   suggestion(id) {
     const x = (this.data.suggestions || []).find((s) => s.id === Number(id));
-    if (!x) throw new Error(`Vorschlag ${id} gibt es nicht`);
+    if (!x) throw new Error(i18n.t('err.suggestion_missing', { id }));
     return x;
   }
 
@@ -124,26 +125,28 @@ class Store {
       for (const f of fs.readdirSync(this.docDir)) {
         if (f.startsWith(`${String(t.id).padStart(4, '0')}-`) && f !== name) fs.unlinkSync(path.join(this.docDir, f));
       }
-      const lines = [`# #${t.id} ${t.title}`, '', `Zustand: ${STATES[t.state] || t.state}  `, `Angelegt: ${t.created} von ${t.created_by}`, ''];
-      if (t.text) lines.push('## Beschreibung', '', t.text, '');
+      const tr = i18n.t;
+      const lines = [`# #${t.id} ${t.title}`, '', `${tr('doc.state', { state: stateLabel(t.state) })}  `, tr('doc.created', { at: t.created, by: t.created_by }), ''];
+      if (t.text) lines.push(`## ${tr('doc.description')}`, '', t.text, '');
       for (const r of t.results) {
-        lines.push(`## ${r.phase === 'umsetzen' ? 'Umsetzung' : 'Entwurf'} vom ${r.at} (${r.kind})`, '');
+        const head = r.phase === 'umsetzen' ? 'doc.impl_from' : r.phase === 'rueckrollung' ? 'doc.rollback_from' : 'doc.draft_from';
+        lines.push(`## ${tr(head, { at: r.at, kind: r.kind })}`, '');
         if (r.summary) lines.push(r.summary, '');
         if (r.details) lines.push(r.details, '');
-        if (r.question) lines.push(`**Rückfrage:** ${r.question}`, '');
-        if (r.files && r.files.length) lines.push(`Geänderte Dateien: ${r.files.join(', ')}`, '');
-        if (r.watch && r.watch.length) lines.push('**Wächter:**', ...r.watch.map((w) => `- ${w}`), '');
-        if (r.message) lines.push(`Meldung: ${r.message}`, '');
+        if (r.question) lines.push(tr('doc.question', { question: r.question }), '');
+        if (r.files && r.files.length) lines.push(tr('doc.files', { files: r.files.join(', ') }), '');
+        if (r.watch && r.watch.length) lines.push(tr('doc.watch'), ...r.watch.map((w) => `- ${w}`), '');
+        if (r.message) lines.push(tr('doc.message', { message: r.message }), '');
       }
       if (t.comments.length) {
-        lines.push('## Kommentare', '');
+        lines.push(`## ${tr('doc.comments')}`, '');
         for (const c of t.comments) lines.push(`- ${c.at} ${c.by}: ${c.text}`);
         lines.push('');
       }
-      lines.push('## Verlauf', '', ...t.history.map((h) => `- ${h.at} ${h.by}: ${h.from ? `${h.from} → ` : ''}${h.to}${h.note ? ` (${h.note})` : ''}`), '');
+      lines.push(`## ${tr('doc.history')}`, '', ...t.history.map((h) => `- ${h.at} ${h.by}: ${h.from ? `${h.from} → ` : ''}${h.to}${h.note ? ` (${h.note})` : ''}`), '');
       fs.writeFileSync(path.join(this.docDir, name), lines.join('\n'));
     } catch (e) {
-      console.error('[hausmeister] Ticketdoku nicht geschrieben:', e.message);
+      console.error('[hausmeister] ticket document not written:', e.message);
     }
   }
 }

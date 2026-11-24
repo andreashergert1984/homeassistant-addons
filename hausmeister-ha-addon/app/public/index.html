@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,17 +12,17 @@
     <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7v2H3.5a1 1 0 0 0 0 2h17a1 1 0 0 0 0-2H19v-2a7 7 0 0 0-5-6.71V5a1 1 0 0 0-2 0v-.93zM11 5.08V9a1 1 0 0 0 2 0V5.08A5 5 0 0 1 17 10v2H7v-2a5 5 0 0 1 4-4.92zM6 16a1 1 0 0 0 0 2h12a1 1 0 0 0 0-2z"/></svg>
     <div>
       <h1>Hausmeister</h1>
-      <div class="sub" id="sub">Smart-Home-Tickets mit Claude</div>
+      <div class="sub" id="sub" data-i18n="board.subtitle"></div>
     </div>
   </div>
   <div class="topactions" id="topactions"></div>
   <nav>
-    <button data-tab="tickets" class="active">Tickets</button>
-    <button data-tab="vorschlaege">Vorschläge <span class="navcount" id="sugcount" hidden></span></button>
-    <button data-tab="neu">Neues Ticket</button>
-    <button data-tab="laeufe">Läufe</button>
-    <button data-tab="sicherungen">Sicherungen</button>
-    <button data-tab="anmeldung">Anmeldung</button>
+    <button data-tab="tickets" class="active" data-i18n="tab.tickets"></button>
+    <button data-tab="vorschlaege"><span data-i18n="tab.suggestions"></span> <span class="navcount" id="sugcount" hidden></span></button>
+    <button data-tab="neu" data-i18n="tab.new"></button>
+    <button data-tab="laeufe" data-i18n="tab.runs"></button>
+    <button data-tab="sicherungen" data-i18n="tab.backups"></button>
+    <button data-tab="anmeldung" data-i18n="tab.login"></button>
   </nav>
 </header>
 <main>
@@ -35,8 +35,8 @@
   <section id="tab-vorschlaege" hidden>
     <div class="panel sughead">
       <div>
-        <h2>Was würde ich anpassen?</h2>
-        <p class="hint">Der Hausmeister schaut sich die Installation an (nur lesend) und schlägt vor, was sich lohnt: Fehler, Sicherheit, Energie, Komfort, Aufräumen. Du entscheidest pro Vorschlag. Abgelehnte schlägt er nicht wieder vor.</p>
+        <h2 data-i18n="sug.heading"></h2>
+        <p class="hint" data-i18n="sug.intro"></p>
       </div>
       <div id="inspectbox"></div>
     </div>
@@ -44,34 +44,34 @@
   </section>
   <section id="tab-neu" hidden>
     <form id="newform" class="panel">
-      <h2>Neues Ticket</h2>
-      <label>Was soll passieren?<input name="title" required maxlength="200" placeholder="z. B. Flurlicht nachts nur gedimmt einschalten"></label>
-      <label>Beschreibung<textarea name="text" rows="5" placeholder="Was genau, wo, warum. Je konkreter, desto besser der Entwurf."></textarea></label>
-      <div class="modes" role="radiogroup" aria-label="Wie soll es laufen?">
-        <label class="mode"><input type="radio" name="mode" value="entwurf" checked><span class="mt">Erst Entwurf</span><span class="md2">Claude schaut sich beim nächsten Lauf alles an und schlägt vor. Du gibst frei.</span></label>
-        <label class="mode"><input type="radio" name="mode" value="sofort"><span class="mt">Sofort umsetzen</span><span class="md2">Startet jetzt, ohne Entwurf. Bei riskanten Dingen fragt Claude trotzdem nach.</span></label>
-        <label class="mode"><input type="radio" name="mode" value="sammeln"><span class="mt">Nur sammeln</span><span class="md2">Kommt auf die Liste, es passiert noch nichts.</span></label>
+      <h2 data-i18n="new.heading"></h2>
+      <label><span data-i18n="new.title"></span><input name="title" required maxlength="200" data-i18n-placeholder="new.title_ph"></label>
+      <label><span data-i18n="new.text"></span><textarea name="text" rows="5" data-i18n-placeholder="new.text_ph"></textarea></label>
+      <div class="modes" role="radiogroup" data-i18n-aria-label="new.mode_label">
+        <label class="mode"><input type="radio" name="mode" value="entwurf" checked><span class="mt" data-i18n="new.mode_draft"></span><span class="md2" data-i18n="new.mode_draft_hint"></span></label>
+        <label class="mode"><input type="radio" name="mode" value="sofort"><span class="mt" data-i18n="new.mode_now"></span><span class="md2" data-i18n="new.mode_now_hint"></span></label>
+        <label class="mode"><input type="radio" name="mode" value="sammeln"><span class="mt" data-i18n="new.mode_collect"></span><span class="md2" data-i18n="new.mode_collect_hint"></span></label>
       </div>
-      <button type="submit" class="primary big">Ticket anlegen</button>
-      <p class="hint">Tickets gehen auch über die To-do-Liste „Hausmeister“, per Sprache oder aus Automationen. Ein Eintrag, der mit „sofort:“ oder „!“ beginnt, wird gleich umgesetzt. Ohne Sofort-Modus wird nichts ohne deine Freigabe geändert.</p>
+      <button type="submit" class="primary big" data-i18n="new.submit"></button>
+      <p class="hint" data-i18n="new.hint"></p>
     </form>
   </section>
   <section id="tab-laeufe" hidden><div id="runs" class="panel"></div></section>
   <section id="tab-sicherungen" hidden>
     <div class="panel">
-      <h2>Sicherungen</h2>
-      <p class="hint">Bei jedem Lauf und vor und nach jeder Umsetzung wird die Konfiguration gesichert (ohne Datenbanken, Logs, Anmeldedaten und sehr große Dateien). Zurückrollen geht im jeweiligen Ticket.</p>
+      <h2 data-i18n="backups.heading"></h2>
+      <p class="hint" data-i18n="backups.intro"></p>
       <div id="backups"></div>
     </div>
   </section>
   <section id="tab-anmeldung" hidden>
     <div class="panel">
       <div class="hint" id="loginhint"></div>
-      <iframe id="term" title="Terminal"></iframe>
+      <iframe id="term" data-i18n-title="login.terminal"></iframe>
     </div>
   </section>
 </main>
-<button class="fab" id="fab" title="Neues Ticket" aria-label="Neues Ticket">+</button>
+<button class="fab" id="fab" data-i18n-title="tab.new" data-i18n-aria-label="tab.new">+</button>
 <script src="app.js"></script>
 </body>
 </html>

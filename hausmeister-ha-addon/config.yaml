@@ -1,10 +1,10 @@
 ---
 name: Hausmeister
-version: "0.6.0"
+version: "0.7.0"
 slug: hausmeister
 description: >-
-  Tickets für das Smart Home, die Claude Code nach deiner Freigabe bearbeitet:
-  erst Entwurf, dann Umsetzung, mit Sicherung, Wächtern und Zurückrollen.
+  Smart home tickets that Claude Code works on after your approval:
+  draft first, then implementation, with backups, watches and rollback.
 url: https://github.com/andreashergert1984/homeassistant-addons/tree/main/hausmeister-ha-addon
 arch:
   - amd64
@@ -50,7 +50,8 @@ options:
   model: ""
   max_quota_percent: 80
   max_backup_gb: 2
-  inspection_day: aus
+  inspection_day: "off"
+  language: auto
 
 schema:
   run_times:
@@ -64,4 +65,5 @@ schema:
   model: str?
   max_quota_percent: int(0,100)
   max_backup_gb: int(0,1000)
-  inspection_day: list(aus|taeglich|mo|di|mi|do|fr|sa|so)
+  inspection_day: list(off|daily|mon|tue|wed|thu|fri|sat|sun|aus|taeglich|mo|di|mi|do|fr|sa|so)
+  language: list(auto|de|en)?

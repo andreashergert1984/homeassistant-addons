@@ -2,6 +2,9 @@
 # Read-only view of the Hausmeister snapshots of /homeassistant.
 case "$1" in
   log|diff|show|status|ls-files|blame) ;;
-  *) echo "cfg-git: nur log, diff, show, status, ls-files, blame" >&2; exit 2 ;;
+  *)
+    if [ "${HM_LANG:-en}" = de ]; then echo "cfg-git: nur log, diff, show, status, ls-files, blame" >&2
+    else echo "cfg-git: only log, diff, show, status, ls-files, blame" >&2; fi
+    exit 2 ;;
 esac
 exec git --git-dir=/data/configgit --work-tree=/homeassistant --no-pager "$@"

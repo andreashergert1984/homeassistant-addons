@@ -1,160 +1,156 @@
 # Hausmeister
 
-**Wünsche und Probleme im Smart Home aufschreiben, Claude Code kümmert sich darum, du gibst frei.**
+English | [Deutsch](README.de.md)
 
-Der Hausmeister ist ein Home-Assistant-Add-on mit einem kleinen Ticket-Board. Tickets kommen über eine
-To-do-Liste (auch per Sprache), das Board oder eine Automation. Zu festen Zeiten schaut sich
-[Claude Code](https://docs.claude.com/en/docs/claude-code/overview) die Installation an, schreibt einen
-Entwurf und setzt ihn erst um, wenn du ihn freigibst. Vorher wird gesichert, danach prüfen Wächter,
-ob etwas kaputtgegangen ist, und mit einem Knopf ist alles wieder zurückgerollt.
+**Write down wishes and problems in your smart home, Claude Code takes care of them, you approve.**
 
-Alles läuft im Add-on auf deinem Home-Assistant-Rechner, auch die Anmeldung bei Claude. Es braucht
-keinen weiteren Rechner.
+Hausmeister ("caretaker") is a Home Assistant add-on with a small ticket board. Tickets come from a todo
+list (also by voice), the board or an automation. At fixed times
+[Claude Code](https://docs.claude.com/en/docs/claude-code/overview) looks at the installation, writes a
+draft and implements it only after you approve it. A backup is made before, watches check afterwards
+whether something broke, and one button rolls everything back.
 
-> The user interface is German. A short English summary is at the end.
+Everything runs inside the add-on on your Home Assistant machine, including the login to Claude. No
+other computer is needed.
 
-![Ticket-Board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/board.png)
+The board, the notifications and Claude's texts are available in English and German. The language follows
+Home Assistant or is set with the option `language`.
 
-## Was es kann
+![Ticket board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/board.png)
 
-- **Tickets von überall:** To-do-Liste „Hausmeister“ (auch per Assist), Board in der Seitenleiste, Ereignis
-  `hausmeister_neues_ticket` aus Automationen.
-- **Erst Entwurf, dann Umsetzung:** Im Entwurf darf Claude nur lesen. Geändert wird erst nach „Claude soll umsetzen“.
-- **Sofort umsetzen**, wenn es schnell gehen soll: ohne Entwurfsfreigabe und ohne auf den Zeitplan zu warten.
-  Bei riskanten Dingen fragt Claude trotzdem nach.
-- **Sicherung vor jeder Änderung:** Schnappschuss der Konfiguration und eine HA-Teilsicherung ohne Datenbank.
-- **Wächter:** Konfigurationsprüfung, geschrumpfte oder gelöschte Dateien, verschwundene oder nicht mehr
-  verfügbare Entitäten, neue Fehler im Log. Auch zwischen den Läufen, wenn etwas anderes etwas kaputt macht.
-- **Zurückrollen** mit einem Knopf.
-- **Push-Meldungen mit Knöpfen:** freigeben, abnehmen, nachbessern oder eine Rückfrage beantworten, direkt
-  aus der Benachrichtigung auf dem Handy.
-- **Live-Fortschritt:** Du siehst, was Claude gerade tut.
-- **Kontingentschutz:** Der Hausmeister liest die Auslastung deines Claude-Abos mit und pausiert geplante
-  Läufe ab einer Grenze, damit für deine andere Arbeit genug übrig bleibt.
-- **„Was würde ich anpassen?“:** Der Hausmeister schaut sich dein Haus an und schlägt vor, was sich lohnt, mit
-  Begründung, Nutzen und Aufwand. Du übernimmst einen Vorschlag mit einem Klick als Ticket oder lehnst ihn ab.
-  Auf Knopfdruck oder regelmäßig als Rundgang.
-- **Doku je Ticket** als Markdown unter `/share/hausmeister/tickets/`, dazu eine Wissensdatei über dein Haus.
+## What it does
 
-## So sieht es aus
+- **Tickets from anywhere:** todo list "Hausmeister" (also through Assist), board in the sidebar, event
+  `hausmeister_neues_ticket` from automations.
+- **Draft first, then implementation:** in a draft Claude may only read. Nothing changes before "Ask Claude to implement".
+- **Implement now** when it has to be quick: without approving a draft and without waiting for the schedule.
+  For risky things Claude still asks.
+- **Backup before every change:** snapshot of the configuration and a partial HA backup without the database.
+- **Watches:** configuration check, shrunk or deleted files, vanished or unavailable entities, new errors in
+  the log. Also between runs, when something else breaks something.
+- **Roll back** with one button.
+- **Push notifications with buttons:** approve, accept, ask for a fix or answer a question, right from the
+  notification on your phone.
+- **Live progress:** you see what Claude is doing right now.
+- **Quota protection:** the add-on reads the usage of your Claude subscription and pauses scheduled runs
+  above a limit, so enough is left for your other work.
+- **"What would I change?":** the caretaker looks at your house and suggests what is worth it, with a reason,
+  benefit and effort. You take a suggestion over as a ticket with one click or decline it. On demand or
+  regularly as an inspection.
+- **A document per ticket** as Markdown under `/share/hausmeister/tickets/`, plus a knowledge file about your house.
 
-**Vorschläge:** Was der Hausmeister an deinem Haus anpassen würde. Was ein Mensch vor Ort tun muss (Batterie,
-Gerät), ist als „machst du selbst“ markiert.
+## How it looks
 
-![Vorschläge](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/vorschlaege.png)
+The screenshots show the German interface and made-up example tickets.
 
-| Entwurf zum Freigeben | Neues Ticket |
+**Suggestions:** what the caretaker would change in your house. Things a person has to do on site (battery,
+device) are marked "you do it yourself".
+
+![Suggestions](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/vorschlaege.png)
+
+| Draft to approve | New ticket |
 | --- | --- |
-| ![Entwurf](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/entwurf.png) | ![Neues Ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/neues-ticket.png) |
+| ![Draft](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/entwurf.png) | ![New ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/neues-ticket.png) |
 
-**Auf dem Handy** (hier im dunklen Modus): Übersicht mit Kennzahlen und eine Rückfrage von Claude. Die Antwort
-geht über das Feld im Ticket oder direkt aus der Push-Meldung.
+**On the phone** (dark mode): overview with key figures and a question from Claude. You answer in the field
+of the ticket or right from the push notification.
 
 <p>
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-liste.png" alt="Ticketliste auf dem Handy" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-liste.png" alt="Ticket list on the phone" width="260">
 &nbsp;
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Rückfrage auf dem Handy" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Question on the phone" width="260">
 </p>
 
-Die Bilder zeigen erfundene Beispieltickets.
+## Requirements
 
-## Voraussetzungen
-
-- Home Assistant OS oder Supervised (Add-ons), amd64 oder aarch64.
-- Ein Claude-Abo (Pro oder Max) oder ein Anthropic-API-Schlüssel. Jeder Lauf verbraucht Kontingent.
-  Steht nichts an, wird Claude gar nicht gestartet.
+- Home Assistant OS or Supervised (add-ons), amd64 or aarch64.
+- A Claude subscription (Pro or Max) or an Anthropic API key. Each run uses quota.
+  When nothing is queued, Claude is not started at all.
 
 ## Installation
 
-1. In Home Assistant: **Einstellungen → Add-ons → Add-on-Store → ⋮ → Repositories**, diese Adresse eintragen:
+1. In Home Assistant: **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add this address:
    `https://github.com/andreashergert1984/homeassistant-addons`
-2. **Hausmeister** installieren. Das Image wird auf deinem Rechner gebaut, das dauert ein paar Minuten.
-3. Im Reiter **Info** „In der Seitenleiste anzeigen“ einschalten und das Add-on starten.
-4. Optional: unter **Einstellungen → Geräte & Dienste → Integration hinzufügen → Lokale To-do-Liste** eine
-   Liste namens **Hausmeister** anlegen (`todo.hausmeister`).
+2. Install **Hausmeister**. The image is built on your machine, this takes a few minutes.
+3. On the **Info** tab turn on "Show in sidebar" and start the add-on.
+4. Optional: under **Settings → Devices & services → Add integration → Local To-do** create a list named
+   **Hausmeister** (`todo.hausmeister`).
 
-## Bei Claude anmelden
+## Log in to Claude
 
-1. In der Seitenleiste **Hausmeister** öffnen, Reiter **Anmeldung**.
-2. Im Terminal `claude` eingeben, dann `/login`.
-3. „Claude account with subscription“ wählen, den Link im Browser öffnen, den Code zurück ins Terminal kopieren.
-4. Mit `/exit` beenden. Oben im Board steht jetzt „Claude angemeldet“.
+1. Open **Hausmeister** in the sidebar, tab **Login**.
+2. Type `claude` in the terminal, then `/login`.
+3. Choose "Claude account with subscription", open the link in the browser, copy the code back into the terminal.
+4. Quit with `/exit`. The board now shows that Claude is logged in.
 
-Die Anmeldung liegt im Add-on und ist aus den Home-Assistant-Sicherungen ausgenommen (die landen oft in der
-Cloud). Nach dem Wiederherstellen einer Sicherung meldest du dich einmal neu an.
+The login stays in the add-on and is excluded from Home Assistant backups (those often end up in the
+cloud). After restoring a backup you log in once more.
 
-## Benutzen
+## Usage
 
-**Ticket anlegen**, zum Beispiel auf die To-do-Liste „Hausmeister“: „Flurlicht nachts nur gedimmt einschalten“.
-Beim nächsten Lauf schreibt Claude einen Entwurf, du bekommst eine Meldung.
+**Create a ticket**, for example on the todo list "Hausmeister": "Only switch the hallway light on dimmed at night".
+On the next run Claude writes a draft and you get a notification.
 
-**Entwurf lesen und entscheiden:**
+**Read the draft and decide:**
 
-| Knopf | Wirkung |
+| Button | Effect |
 | --- | --- |
-| Claude soll umsetzen | wird beim nächsten Lauf umgesetzt |
-| Sofort umsetzen | wird jetzt umgesetzt |
-| Claude soll entwerfen | neuer Entwurf, deinen Kommentar vorher ins Feld schreiben |
-| Verwerfen | Ticket schließen |
+| Ask Claude to implement | implemented on the next run |
+| Implement now | implemented right away |
+| Ask Claude for a draft | new draft, write your comment into the field first |
+| Discard | close the ticket |
 
-**Nach der Umsetzung:** „Abnehmen, passt“, „Nachbessern“ mit Kommentar oder „Zurückrollen“.
+**After the implementation:** "Accept, all good", "Ask for a fix" with a comment, or "Roll back".
 
-**Sofort umsetzen von unterwegs:** einen Eintrag mit `sofort:` oder `!` beginnen, zum Beispiel
-„sofort: Weihnachtsbeleuchtung ab 17 Uhr einschalten“.
+**Implement now from anywhere:** start a todo item with `now:`, `sofort:` or `!`, for example
+"now: switch the Christmas lights on from 5 pm".
 
-**Ticket aus einer Automation:**
+**Ticket from an automation:**
 
 ```yaml
 action: event.fire
 data:
   event_type: hausmeister_neues_ticket
   event_data:
-    titel: Luftfeuchte im Keller seit drei Tagen über 70 %
-    text: Bitte prüfen, ob der Entfeuchter läuft, und eine Warnung einrichten.
-    modus: entwurf   # entwurf, sofort oder sammeln
+    titel: Humidity in the basement above 70 % for three days
+    text: Please check whether the dehumidifier runs, and set up a warning.
+    modus: entwurf   # entwurf (draft), sofort (now) or sammeln (collect)
 ```
 
-**Vorschläge holen:** Reiter **Vorschläge**, „Jetzt umschauen“. Oder mit `inspection_day` regelmäßig.
-Pro Vorschlag: „Als Ticket“ (Entwurf), „Sofort umsetzen“, „Nur merken“ oder „Nicht nötig“. Abgelehnte Vorschläge
-kommen nicht wieder.
+**Get suggestions:** tab **Suggestions**, "Look around now". Or regularly with `inspection_day`.
+For each suggestion: "As ticket" (draft), "Implement now", "Just keep" or "Not needed". Declined suggestions
+do not come back.
 
-**Sensoren für Dashboards:** `sensor.hausmeister_wartet_auf_dich` (Tickets, die dich brauchen) und
-`sensor.hausmeister_offen` (alle offenen, mit nächstem Lauf, Kontingent und aktuellem Schritt).
+**Sensors for dashboards:** `sensor.hausmeister_wartet_auf_dich` (tickets that need you) and
+`sensor.hausmeister_offen` (all open ones, with next run, quota and current step).
 
-## Einstellungen
+## Options
 
-| Option | Vorgabe | Bedeutung |
+| Option | Default | Meaning |
 | --- | --- | --- |
-| `run_times` | 11:00, 16:00 | Zeiten der Läufe |
-| `auto_draft` | an | neue Tickets gleich entwerfen |
-| `max_tickets_per_run` | 5 | höchstens so viele Tickets je Lauf |
-| `run_timeout_minutes` | 30 | Zeitgrenze je Ticket |
-| `backup_before_change` | an | HA-Teilsicherung vor jeder Umsetzung |
-| `intake_todo` | todo.hausmeister | To-do-Liste für neue Tickets, leer schaltet aus |
-| `notify_service` | | Push-Dienst, z. B. `notify.mobile_app_mein_handy` |
-| `model` | | z. B. `sonnet` oder `opus`, leer = Vorgabe von Claude Code |
-| `max_quota_percent` | 80 | geplante Läufe pausieren über dieser Abo-Auslastung, 0 = aus |
-| `inspection_day` | aus | Rundgang: `aus`, `taeglich` oder `mo` … `so` |
+| `run_times` | 11:00, 16:00 | times of the runs |
+| `auto_draft` | on | draft new tickets right away |
+| `max_tickets_per_run` | 5 | at most this many tickets per run |
+| `run_timeout_minutes` | 30 | time limit per ticket |
+| `backup_before_change` | on | partial HA backup before each implementation |
+| `intake_todo` | todo.hausmeister | todo list for new tickets, empty turns it off |
+| `notify_service` | | push service, e.g. `notify.mobile_app_my_phone` |
+| `model` | | e.g. `sonnet` or `opus`, empty = Claude Code default |
+| `max_quota_percent` | 80 | scheduled runs pause above this subscription usage, 0 = off |
+| `max_backup_gb` | 2 | no HA backup before a change when the config folder is larger; the git snapshot still runs |
+| `inspection_day` | off | inspection: `off`, `daily` or `mon` … `sun` (the German values `aus`, `taeglich`, `mo` … `so` still work) |
+| `language` | auto | `auto` follows Home Assistant (English or German, otherwise English), `de` or `en` sets it |
 
-## Sicherheit, ehrlich gesagt
+## Safety, honestly
 
-- Claude bekommt feste Regeln: keine Datei komplett neu schreiben, `.storage` nur über die API ändern,
-  keine Geräte schalten, keine Add-ons, Updates, Benutzer oder Geheimnisse anfassen, vor jedem Neustart die
-  Konfiguration prüfen. Im Entwurf sind Schreibwerkzeuge technisch gesperrt.
-- In der Umsetzung hat das Add-on Schreibzugriff auf die Konfiguration und die Supervisor-Rolle `manager`.
-  Die Regeln sind eine starke Vorgabe für das Modell, aber keine Sandbox. **Gib nur Entwürfe frei, die du
-  verstehst.** Für „Sofort umsetzen“ gilt das erst recht.
-- Board und Terminal sind nur für Home-Assistant-Admins sichtbar.
-- Sicherungen: eigener Git-Verlauf der Konfiguration (ohne Datenbanken, Logs, Anmeldedaten, Modellordner und
-  Dateien über 20 MB) und, wenn eingeschaltet, eine HA-Teilsicherung vor jeder Umsetzung.
+- Claude gets fixed rules: never rewrite a whole file, change `.storage` only through the API, do not switch
+  devices, do not touch add-ons, updates, users or secrets, check the configuration before every restart. In a
+  draft the writing tools are technically blocked.
+- In the implementation the add-on has write access to the configuration and the Supervisor role `manager`.
+  The rules are a strong guideline for the model, but not a sandbox. **Only approve drafts you understand.**
+  This applies all the more to "Implement now".
+- Board and terminal are only visible to Home Assistant admins.
+- Backups: a git history of the configuration of its own (without databases, logs, login data, model folders
+  and files over 20 MB) and, if turned on, a partial HA backup before every implementation.
 
-Ausführliche Doku: [DOCS.md](DOCS.md). Änderungen: [CHANGELOG.md](CHANGELOG.md).
-
-## English summary
-
-Hausmeister ("caretaker") is a Home Assistant add-on with a small ticket board. Claude Code, logged in
-inside the add-on, drafts a change for each ticket (read only), and implements it after you approve it,
-or immediately if you choose so. Every change is preceded by a configuration snapshot and a partial HA
-backup and followed by watches (config check, shrunk files, vanished or unavailable entities, new log
-errors). One click rolls it back. Notifications have action buttons, the board shows live progress, and
-scheduled runs pause when your Claude subscription usage is above a limit. The UI is German.
+Full documentation: [DOCS.md](DOCS.md). Changes: [CHANGELOG.md](CHANGELOG.md) (in German).

@@ -11,7 +11,7 @@ Or manually: **Settings → Add-ons → Add-on Store → ⋮ → Repositories**,
 
 | Add-on | What it does | Architectures |
 | --- | --- | --- |
-| [Hausmeister](hausmeister-ha-addon/README.md) | Smart home tickets that Claude Code drafts and, after your approval, implements: with backups, watches and one-click rollback. German UI. | amd64, aarch64 |
+| [Hausmeister](hausmeister-ha-addon/README.md) | Smart home tickets that Claude Code drafts and, after your approval, implements: with backups, watches and one-click rollback. English and German UI. | amd64, aarch64 |
 | [Yuvomi Family Planner](yuvomi-ha-addon/README.md) | Self-hosted family planner (tasks, calendar, budget, meals, shopping) plus a pantry scan terminal. | amd64, aarch64 |
 | [Garage S3 Object Storage](garage-ha-addon/) | Lightweight S3-compatible object storage (Garage) with a web UI for buckets and keys. | amd64, aarch64 |
 | [MinIO Object Storage](minio-ha-addon/) | S3-compatible object storage server. | amd64, aarch64, armv7 |

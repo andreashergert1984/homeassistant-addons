@@ -28,7 +28,10 @@ configuration:
     description: If the config folder is larger (for example model files or media), no HA backup is made before an implementation, only the git snapshot of the configuration. A partial HA backup always contains the whole folder.
   inspection_day:
     name: Inspection
-    description: On this day the first run looks around (read only) and fills the Vorschläge (suggestions) tab. aus (off), taeglich (daily) or a weekday (mo, di, mi, do, fr, sa, so).
+    description: On this day the first run looks around (read only) and fills the Suggestions tab. off, daily or a weekday (mon to sun). The German values aus, taeglich and mo to so still work.
   model:
     name: Model
     description: Optional, e.g. sonnet or opus. Empty uses the Claude Code default.
+  language:
+    name: Language
+    description: Language of the board, the notifications and Claude's texts. auto follows the language of Home Assistant (German or English, otherwise English), de or en set it.

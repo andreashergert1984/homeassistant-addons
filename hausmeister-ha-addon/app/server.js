@@ -6,6 +6,7 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const L = require('./lib/logic');
+const i18n = require('./lib/i18n');
 const ha = require('./lib/ha');
 const git = require('./lib/git');
 const { Store } = require('./lib/store');
@@ -16,6 +17,10 @@ const PORT = Number(process.env.HM_PORT || 8099);
 const TTYD_PORT = Number(process.env.HM_TTYD_PORT || 7681);
 const SHARE = process.env.HM_SHARE_DIR || '/share/hausmeister';
 const PUBLIC = path.join(__dirname, 'public');
+const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
+const HOME_DIR = process.env.HM_HOME_DIR || '/data/home';
+const tr = i18n.t;
+const { ACTOR, REASON } = L;
 
 const raw = fs.existsSync(OPTIONS_FILE) ? JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8')) : {};
 const opts = {
@@ -29,10 +34,30 @@ const opts = {
   model: raw.model || '',
   max_quota_percent: raw.max_quota_percent === undefined ? 80 : Number(raw.max_quota_percent),
   max_backup_gb: raw.max_backup_gb === undefined ? 2 : Number(raw.max_backup_gb),
-  inspection_day: raw.inspection_day || 'aus',
+  inspection_day: raw.inspection_day || 'off',
+  language: raw.language || 'auto',
   panel_url: '',
 };
-const WEEKDAYS = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
+// Until Home Assistant answers, "auto" means English.
+i18n.setLanguage(i18n.resolve(opts.language, null));
+
+// Language from the option, "auto" asks Home Assistant. Returns true when it changed.
+async function applyLanguage(getConfig = () => ha.core('GET', '/config')) {
+  const before = i18n.language();
+  i18n.setLanguage(await i18n.detect(opts.language, getConfig));
+  return i18n.language() !== before;
+}
+
+// Files Claude and the terminal read, in the active language: rules (CLAUDE.md), the
+// greeting of the login terminal and, if missing, the knowledge file of the house.
+function writeRuntimeFiles({ work = WORK_DIR, home = HOME_DIR, share = SHARE } = {}) {
+  const lang = i18n.language();
+  const write = (f, text) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); } catch (e) { console.error(`[hausmeister] ${f}:`, e.message); } };
+  write(path.join(work, 'CLAUDE.md'), fs.readFileSync(path.join(__dirname, 'prompt', `regeln.${lang}.md`), 'utf8'));
+  write(path.join(home, '.bash_profile'), `cd ${work}\necho\necho ${JSON.stringify(tr('terminal.hello'))}\necho ${JSON.stringify(tr('terminal.helpers'))}\necho\n`);
+  const wissen = path.join(share, 'WISSEN.md');
+  if (!fs.existsSync(wissen)) write(wissen, `# ${tr('knowledge.title')}\n\n${tr('knowledge.text')}\n`);
+}
 
 fs.mkdirSync(SHARE, { recursive: true });
 const store = new Store(process.env.HM_STATE || '/data/state.json', path.join(SHARE, 'tickets'));
@@ -45,13 +70,13 @@ async function publish() {
   const waiting = count(['entwurf', 'rueckfrage', 'umgesetzt', 'pruefen', 'fehler']);
   const last = store.data.runs[0];
   await ha.setSensor('sensor.hausmeister_wartet_auf_dich', waiting, {
-    friendly_name: 'Hausmeister wartet auf dich', icon: 'mdi:account-hard-hat', unit_of_measurement: 'Tickets',
+    friendly_name: tr('sensor_name.waiting'), icon: 'mdi:account-hard-hat', unit_of_measurement: 'Tickets',
     entwurf: count(['entwurf']), rueckfrage: count(['rueckfrage']), abnehmen: count(['umgesetzt', 'pruefen']), fehler: count(['fehler']),
   });
   await ha.setSensor('sensor.hausmeister_offen', count(['neu', 'entwerfen', 'entwurf', 'rueckfrage', 'umsetzen', 'in_arbeit', 'umgesetzt', 'pruefen', 'fehler']), {
-    friendly_name: 'Hausmeister offene Tickets', icon: 'mdi:clipboard-list', unit_of_measurement: 'Tickets',
+    friendly_name: tr('sensor_name.open'), icon: 'mdi:clipboard-list', unit_of_measurement: 'Tickets',
     in_arbeit: runner.current ? `#${runner.current.id}` : null, naechster_lauf: L.nextRun(opts.run_times, new Date()),
-    letzter_lauf: last ? last.at : null, letzter_lauf_ergebnis: last ? (last.note || `${last.tickets.length} Ticket(s)`) : null,
+    letzter_lauf: last ? last.at : null, letzter_lauf_ergebnis: last ? (last.note || tr('sensor_name.run_tickets', { n: last.tickets.length })) : null,
     vorschlaege_offen: (store.data.suggestions || []).filter((x) => x.state === 'offen').length,
     angemeldet: runner.loggedIn(), schritt: runner.current ? runner.current.step : null,
     kontingent_prozent: store.data.quota && store.data.quota.utilization != null ? Math.round(store.data.quota.utilization * 100) : null,
@@ -70,32 +95,32 @@ async function intake() {
     items = r.items || [];
     intakeWarned = false;
   } catch (e) {
-    if (!intakeWarned) console.error(`[hausmeister] To-do-Liste ${opts.intake_todo} nicht lesbar: ${e.message}`);
+    if (!intakeWarned) console.error(`[hausmeister] todo list ${opts.intake_todo} not readable: ${e.message}`);
     intakeWarned = true;
     return;
   }
   const now = [];
   for (const it of items.filter((i) => i.status === 'needs_action')) {
     const p = L.parseIntake(it.summary);
-    const t = store.create({ title: p.title, text: it.description || '', by: 'To-do-Liste', source: 'todo', state: p.immediate ? 'umsetzen' : (opts.auto_draft ? 'entwerfen' : 'neu'), direct: p.immediate });
+    const t = store.create({ title: p.title, text: it.description || '', by: ACTOR.todo, source: 'todo', state: p.immediate ? 'umsetzen' : (opts.auto_draft ? 'entwerfen' : 'neu'), direct: p.immediate });
     if (p.immediate) now.push(t.id);
     try {
       await ha.core('POST', '/services/todo/remove_item', { entity_id: opts.intake_todo, item: it.uid || it.summary });
-    } catch (e) { console.error(`[hausmeister] Eintrag nicht entfernt (#${t.id}):`, e.message); }
-    console.log(`[hausmeister] Ticket #${t.id} aus der To-do-Liste: ${t.title}`);
+    } catch (e) { console.error(`[hausmeister] todo item not removed (#${t.id}):`, e.message); }
+    console.log(`[hausmeister] ticket #${t.id} from the todo list: ${t.title}`);
   }
-  if (now.length) runner.kick(now, 'To-do-Liste');
+  if (now.length) runner.kick(now, ACTOR.todo);
   if (items.length) publish().catch(() => {});
 }
 
 // ---- events: buttons in push notifications, tickets from automations -------
 let userNames = {};
 async function userName(id) {
-  if (!id) return 'Handy';
+  if (!id) return ACTOR.phone;
   if (!userNames[id]) {
     try { for (const u of await ha.ws('config/auth/list')) userNames[u.id] = u.name; } catch { /* not allowed */ }
   }
-  return userNames[id] || 'Handy';
+  return userNames[id] || ACTOR.phone;
 }
 
 async function onEvent(ev) {
@@ -110,21 +135,21 @@ async function onEvent(ev) {
       if (text && String(text).trim()) t.comments.push({ at: store.now(), by, text: String(text).trim() });
       if (a.key === 'sofort' && t.state !== 'umsetzen') t.direct = t.state !== 'entwurf';
       else if (a.key === 'umsetzen') t.direct = false;
-      store.move(t, to, by, `${L.ACTIONS[a.key].label} (Benachrichtigung)`);
+      store.move(t, to, by, tr('history.via_notification', { action: L.actionLabel(a.key) }));
       if (L.ACTIONS[a.key].immediate) runner.kick([t.id], by);
-      console.log(`[hausmeister] #${t.id}: ${a.key} über die Benachrichtigung von ${by}`);
+      console.log(`[hausmeister] #${t.id}: ${a.key} from the notification of ${by}`);
     } catch (e) {
-      await ha.notify(`Hausmeister #${t.id}`, `Nicht ausgeführt: ${e.message}`, { service: opts.notify_service, id: `hausmeister_${t.id}` });
+      await ha.notify(tr('notify.ticket_short', { id: t.id }), tr('notify.not_done', { message: e.message }), { service: opts.notify_service, id: `hausmeister_${t.id}` });
     }
     publish().catch(() => {});
   } else if (ev.event_type === 'hausmeister_neues_ticket') {
     const d = ev.data || {};
     const mode = d.modus || d.mode || (opts.auto_draft ? 'entwurf' : 'sammeln');
     const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[mode];
-    if (!state) { console.error(`[hausmeister] hausmeister_neues_ticket: unbekannter Modus ${mode}`); return; }
-    const t = store.create({ title: d.titel || d.title, text: d.text || '', by: d.von || 'Automation', source: 'event', state, direct: mode === 'sofort' });
-    if (mode === 'sofort') runner.kick([t.id], 'Automation');
-    console.log(`[hausmeister] Ticket #${t.id} aus einem Ereignis: ${t.title}`);
+    if (!state) { console.error(`[hausmeister] hausmeister_neues_ticket: unknown mode ${mode}`); return; }
+    const t = store.create({ title: d.titel || d.title, text: d.text || '', by: d.von || ACTOR.automation, source: 'event', state, direct: mode === 'sofort' });
+    if (mode === 'sofort') runner.kick([t.id], ACTOR.automation);
+    console.log(`[hausmeister] ticket #${t.id} from an event: ${t.title}`);
     publish().catch(() => {});
   }
 }
@@ -132,19 +157,18 @@ async function onEvent(ev) {
 // ---- schedule --------------------------------------------------------------
 function maybeInspection(key) {
   const [day, time] = key.split(' ');
-  if (opts.inspection_day === 'aus' || time !== opts.run_times[0]) return;
-  if (WEEKDAYS[new Date().getDay()] !== opts.inspection_day && opts.inspection_day !== 'taeglich') return;
+  if (time !== opts.run_times[0] || !L.inspectionDue(opts.inspection_day, new Date())) return;
   if (store.data.tickets.some((t) => t.kind === 'rundgang' && t.created.slice(0, 10) === day)) return;
-  const t = store.create({ title: `Rundgang vom ${day}`, text: 'Regelmäßiger Rundgang: nur lesen, Probleme finden, Tickets vorschlagen.', by: 'Zeitplan', source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
-  console.log(`[hausmeister] Rundgang #${t.id} angelegt`);
+  const t = store.create({ title: tr('inspect.title_scheduled', { day }), text: tr('inspect.text_scheduled'), by: ACTOR.schedule, source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
+  console.log(`[hausmeister] inspection #${t.id} created`);
 }
 
 async function tick() {
   for (const key of L.dueTimes(opts.run_times, new Date(), fired)) {
     fired.add(key);
     maybeInspection(key);
-    console.log(`[hausmeister] Geplanter Lauf ${key}`);
-    runner.cycle(`Zeitplan ${key.split(' ')[1]}`).then(() => publish()).catch((e) => console.error(e));
+    console.log(`[hausmeister] scheduled run ${key}`);
+    runner.cycle(`${REASON.schedule} ${key.split(' ')[1]}`).then(() => publish()).catch((e) => console.error(e));
   }
 }
 // Times already passed today do not fire after a restart.
@@ -156,7 +180,7 @@ for (const t of opts.run_times) {
 
 // ---- HTTP ------------------------------------------------------------------
 function who(req) {
-  return String(req.headers['x-remote-user-display-name'] || req.headers['x-remote-user-name'] || 'unbekannt');
+  return String(req.headers['x-remote-user-display-name'] || req.headers['x-remote-user-name'] || ACTOR.unknown);
 }
 
 function send(res, code, body, type = 'application/json; charset=utf-8') {
@@ -167,13 +191,13 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let b = '';
-    req.on('data', (d) => { b += d; if (b.length > 1e6) { reject(new Error('zu groß')); req.destroy(); } });
-    req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { reject(new Error('kein JSON')); } });
+    req.on('data', (d) => { b += d; if (b.length > 1e6) { reject(new Error(tr('err.too_large'))); req.destroy(); } });
+    req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { reject(new Error(tr('err.no_json'))); } });
   });
 }
 
 function view(t, full) {
-  const base = { id: t.id, title: t.title, state: t.state, state_label: L.STATES[t.state], updated: t.updated, created: t.created, created_by: t.created_by, source: t.source, kind: t.kind || 'ticket', direct: !!t.direct };
+  const base = { id: t.id, title: t.title, state: t.state, state_label: L.stateLabel(t.state), updated: t.updated, created: t.created, created_by: t.created_by, source: t.source, kind: t.kind || 'ticket', direct: !!t.direct };
   if (!full) return { ...base, summary: (t.results[t.results.length - 1] || {}).summary || '' };
   return { ...t, ...base, actions: L.actionsFor(t), can_rollback: !!(t.snapshot && t.snapshot.post && ['umgesetzt', 'pruefen', 'erledigt', 'fehler'].includes(t.state)) };
 }
@@ -183,7 +207,7 @@ function proxyTtyd(req, res) {
     res.writeHead(r.statusCode, r.headers);
     r.pipe(res);
   });
-  p.on('error', () => send(res, 502, 'Terminal nicht erreichbar', 'text/plain; charset=utf-8'));
+  p.on('error', () => send(res, 502, tr('err.terminal_unreachable'), 'text/plain; charset=utf-8'));
   req.pipe(p);
 }
 
@@ -199,15 +223,20 @@ async function route(req, res) {
     return send(res, 200, fs.readFileSync(f), TYPES[path.extname(f)]);
   }
   try {
+    if (req.method === 'GET' && p === '/api/i18n') {
+      return send(res, 200, { lang: i18n.language(), locale: i18n.locale(), dict: i18n.boardDict() });
+    }
     if (req.method === 'GET' && p === '/api/state') {
       return send(res, 200, {
         tickets: store.data.tickets.map((t) => view(t, false)).sort((a, b) => b.updated.localeCompare(a.updated)),
-        runs: store.data.runs.slice(0, 30), busy: runner.busy, current: runner.current && { ...runner.current, steps: runner.current.steps.slice(-15) }, logged_in: runner.loggedIn(),
-        suggestions: (store.data.suggestions || []).slice().reverse(), kategorien: L.KATEGORIEN,
+        runs: store.data.runs.slice(0, 30).map((r) => ({ ...r, reason_label: L.reasonLabel(r.reason), by_label: L.actorLabel(r.by) })), busy: runner.busy, current: runner.current && { ...runner.current, steps: runner.current.steps.slice(-15) }, logged_in: runner.loggedIn(),
+        suggestions: (store.data.suggestions || []).slice().reverse(), kategorien: L.categories(),
         inspecting: store.data.tickets.some((t) => t.kind === 'rundgang' && ['entwerfen', 'in_arbeit'].includes(t.state)),
         quota: store.data.quota || null, max_quota_percent: opts.max_quota_percent, quota_blocked: runner.quotaBlocked(), watchdog: store.data.watchdog || null,
         next_run: L.nextRun(opts.run_times, new Date()), options: { run_times: opts.run_times, auto_draft: opts.auto_draft, intake_todo: opts.intake_todo },
-        states: L.STATES,
+        states: L.states(), lang: i18n.language(),
+        actors: Object.fromEntries(Object.values(ACTOR).map((a) => [a, L.actorLabel(a)])),
+        quiet_actors: [ACTOR.todo, ACTOR.automation, ACTOR.schedule, ACTOR.unknown], schedule_actor: ACTOR.schedule,
       });
     }
     let m = /^\/api\/tickets\/(\d+)$/.exec(p);
@@ -215,7 +244,7 @@ async function route(req, res) {
     if (req.method === 'POST' && p === '/api/tickets') {
       const b = await readBody(req);
       const mode = b.mode || (b.draft === false ? 'sammeln' : 'entwurf');
-      if (!['entwurf', 'sofort', 'sammeln'].includes(mode)) throw new Error(`Unbekannter Modus ${mode}`);
+      if (!['entwurf', 'sofort', 'sammeln'].includes(mode)) throw new Error(tr('err.unknown_mode', { mode }));
       const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[mode];
       const t = store.create({ title: b.title, text: b.text, by: who(req), state, direct: mode === 'sofort' });
       if (mode === 'sofort') runner.kick([t.id], who(req));
@@ -227,36 +256,36 @@ async function route(req, res) {
       const t = store.get(m[1]);
       const b = await readBody(req);
       if (m[2] === 'comment') {
-        if (!String(b.text || '').trim()) throw new Error('Kommentar ist leer');
+        if (!String(b.text || '').trim()) throw new Error(tr('err.comment_empty'));
         store.comment(t, who(req), b.text);
       } else if (m[2] === 'edit') {
-        if (!['neu', 'entwurf', 'rueckfrage', 'fehler'].includes(t.state)) throw new Error('Ändern geht nur, solange das Ticket nicht bearbeitet wird');
-        if (b.title !== undefined) { if (!String(b.title).trim()) throw new Error('Titel fehlt'); t.title = String(b.title).trim().slice(0, 200); }
+        if (!['neu', 'entwurf', 'rueckfrage', 'fehler'].includes(t.state)) throw new Error(tr('err.edit_locked'));
+        if (b.title !== undefined) { if (!String(b.title).trim()) throw new Error(tr('err.title_missing')); t.title = String(b.title).trim().slice(0, 200); }
         if (b.text !== undefined) t.text = String(b.text);
         store.touch(t);
       } else if (m[2] === 'rollback') {
         await runner.rollback(t, who(req));
       } else {
-        if (t.state === 'in_arbeit') throw new Error('Das Ticket wird gerade bearbeitet');
+        if (t.state === 'in_arbeit') throw new Error(tr('err.ticket_busy'));
         const to = L.applyAction(t, b.action, b.comment);
         if (b.comment && String(b.comment).trim()) t.comments.push({ at: store.now(), by: who(req), text: String(b.comment).trim() });
         // Implementing an approved draft vs. planning and implementing in one go.
         if (b.action === 'sofort' && t.state !== 'umsetzen') t.direct = t.state !== 'entwurf';
         else if (b.action === 'umsetzen' || b.action === 'entwerfen') t.direct = false;
-        store.move(t, to, who(req), L.ACTIONS[b.action].label);
+        store.move(t, to, who(req), L.actionLabel(b.action));
         if (L.ACTIONS[b.action].immediate) runner.kick([t.id], who(req));
       }
       publish().catch(() => {});
       return send(res, 200, view(t, true));
     }
     if (req.method === 'POST' && p === '/api/run') {
-      if (runner.busy) throw new Error('Es läuft schon ein Lauf');
-      runner.cycle('von Hand', who(req)).then(() => publish()).catch((e) => console.error(e));
+      if (runner.busy) throw new Error(tr('err.run_busy'));
+      runner.cycle(REASON.manual, who(req)).then(() => publish()).catch((e) => console.error(e));
       return send(res, 200, { started: true });
     }
     if (req.method === 'POST' && p === '/api/inspect') {
-      if (store.data.tickets.some((t) => t.kind === 'rundgang' && ['entwerfen', 'in_arbeit'].includes(t.state))) throw new Error('Der Hausmeister schaut sich schon um');
-      const t = store.create({ title: `Umschauen am ${new Date().toLocaleDateString('de-DE')}`, text: 'Was würde ich anpassen? Nur lesen, Vorschläge sammeln.', by: who(req), source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
+      if (store.data.tickets.some((t) => t.kind === 'rundgang' && ['entwerfen', 'in_arbeit'].includes(t.state))) throw new Error(tr('err.inspect_busy'));
+      const t = store.create({ title: tr('inspect.title_manual', { date: new Date().toLocaleDateString(i18n.locale()) }), text: tr('inspect.text_manual'), by: who(req), source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
       runner.kick([t.id], who(req));
       publish().catch(() => {});
       return send(res, 200, { started: true, id: t.id });
@@ -266,17 +295,17 @@ async function route(req, res) {
       const x = store.suggestion(m[1]);
       const b = await readBody(req);
       if (b.action === 'ablehnen' || b.action === 'wieder' || b.action === 'erledigt') {
-        if (b.action !== 'wieder' && x.state !== 'offen') throw new Error('Der Vorschlag ist schon entschieden');
-        if (b.action === 'wieder' && !['abgelehnt', 'erledigt'].includes(x.state)) throw new Error('Nur abgelehnte oder erledigte Vorschläge lassen sich zurückholen');
+        if (b.action !== 'wieder' && x.state !== 'offen') throw new Error(tr('err.suggestion_decided'));
+        if (b.action === 'wieder' && !['abgelehnt', 'erledigt'].includes(x.state)) throw new Error(tr('err.suggestion_restore'));
         x.state = b.action === 'wieder' ? 'offen' : b.action === 'ablehnen' ? 'abgelehnt' : 'erledigt';
         x.decided = store.now();
         x.decided_by = who(req);
         store.save();
         return send(res, 200, x);
       }
-      if (!['entwurf', 'sofort', 'sammeln'].includes(b.action)) throw new Error(`Unbekannte Aktion ${b.action}`);
-      if (x.state !== 'offen') throw new Error('Der Vorschlag ist schon entschieden');
-      const text = [x.text, x.reason ? `Begründung aus dem Rundgang: ${x.reason}` : ''].filter(Boolean).join('\n\n');
+      if (!['entwurf', 'sofort', 'sammeln'].includes(b.action)) throw new Error(tr('err.unknown_action', { action: b.action }));
+      if (x.state !== 'offen') throw new Error(tr('err.suggestion_decided'));
+      const text = [x.text, x.reason ? tr('suggestion.reason_in_ticket', { reason: x.reason }) : ''].filter(Boolean).join('\n\n');
       const state = { entwurf: 'entwerfen', sofort: 'umsetzen', sammeln: 'neu' }[b.action];
       const t = store.create({ title: x.title, text, by: who(req), source: 'rundgang', state, direct: b.action === 'sofort' });
       Object.assign(x, { state: 'uebernommen', ticket: t.id, decided: store.now(), decided_by: who(req) });
@@ -287,7 +316,7 @@ async function route(req, res) {
     }
     if (req.method === 'POST' && p === '/api/cancel') return send(res, 200, { cancelled: runner.cancel() });
     if (req.method === 'GET' && p === '/api/backups') return send(res, 200, await git.log(50));
-    return send(res, 404, { error: 'nicht gefunden' });
+    return send(res, 404, { error: tr('err.not_found') });
   } catch (e) {
     return send(res, 400, { error: e.message });
   }
@@ -313,17 +342,24 @@ server.on('upgrade', (req, sock, head) => {
 async function main() {
   await git.init();
   try { const self = await ha.sup('GET', '/addons/self/info'); opts.panel_url = `/${self.slug}`; } catch { /* outside the Supervisor */ }
-  server.listen(PORT, () => console.log(`[hausmeister] Board auf Port ${PORT}, Läufe um ${opts.run_times.join(', ')}`));
+  server.listen(PORT, () => console.log(`[hausmeister] board on port ${PORT}, runs at ${opts.run_times.join(', ')}`));
   await ha.waitForCore();
+  await applyLanguage();
+  writeRuntimeFiles();
+  console.log(`[hausmeister] language ${i18n.language()} (option ${opts.language})`);
   await publish().catch(() => {});
-  await runner.backup('Start');
-  ha.subscribe(['mobile_app_notification_action', 'hausmeister_neues_ticket'], (ev) => { onEvent(ev).catch((e) => console.error('[hausmeister] Ereignis:', e.message)); });
+  await runner.backup(REASON.start);
+  ha.subscribe(['mobile_app_notification_action', 'hausmeister_neues_ticket'], (ev) => { onEvent(ev).catch((e) => console.error('[hausmeister] event:', e.message)); });
   setInterval(() => { tick().catch((e) => console.error(e)); }, 30000);
   setInterval(() => { intake().catch((e) => console.error(e)); }, 60000);
-  setInterval(() => { publish().catch(() => {}); }, 15 * 60000);
+  setInterval(() => {
+    // The language of Home Assistant can change at any time.
+    applyLanguage().then((changed) => { if (changed) writeRuntimeFiles(); }).catch(() => {});
+    publish().catch(() => {});
+  }, 15 * 60000);
   intake().catch(() => {});
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { route, store, runner, opts, onEvent, maybeInspection };
+module.exports = { route, store, runner, opts, onEvent, maybeInspection, applyLanguage, writeRuntimeFiles };

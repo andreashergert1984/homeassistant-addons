@@ -2,6 +2,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const L = require('../lib/logic');
+const i18n = require('../lib/i18n');
+
+// The expectations below are the German texts; English is checked in i18n.test.js.
+i18n.setLanguage('de');
 
 const t = (state, phase = null) => ({ state, phase });
 

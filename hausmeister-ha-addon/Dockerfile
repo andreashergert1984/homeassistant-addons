@@ -3,7 +3,7 @@ FROM docker.io/library/node:22-trixie-slim
 
 LABEL \
     io.hass.name="Hausmeister" \
-    io.hass.description="Smart-Home-Tickets, die Claude Code nach Freigabe bearbeitet" \
+    io.hass.description="Smart home tickets that Claude Code works on after approval" \
     io.hass.type="addon" \
     maintainer="Andreas Hergert <andreashergert1984@googlemail.com>"
 

@@ -1,3 +1,13 @@
+## 0.7.0
+
+- Deutsch und Englisch: Board, Fehlermeldungen, Benachrichtigungen mit ihren Knöpfen, Ticketdokumente, Sensornamen, Sicherungsnamen und die Helfer für Claude gibt es in beiden Sprachen. Datum und Uhrzeit folgen der Sprache.
+- Neue Option `language`: `auto` (Vorgabe) folgt der Sprache von Home Assistant, andere Sprachen werden Englisch; `de` oder `en` legen sie fest. Ein Wechsel in Home Assistant greift nach spätestens 15 Minuten.
+- Claude schreibt Entwürfe, Rückfragen, Vorschläge und Berichte in der eingestellten Sprache; die Regeln gibt es als `regeln.de.md` und `regeln.en.md`, Inhalt und Sicherheitsregeln sind gleich geblieben.
+- `inspection_day` versteht zusätzlich `off`, `daily` und `mon` bis `sun` (neue Vorgabe `off`); die deutschen Werte gelten weiter.
+- To-do-Einträge mit `now:` werden wie `sofort:` und `!` gleich umgesetzt.
+- Vorhandene Tickets, Vorschläge und Läufe laufen unverändert weiter; schon gespeicherte Texte bleiben in ihrer Sprache.
+- README und DOCS auf Englisch, der deutsche Text steht in README.de.md und am Ende von DOCS.md.
+
 ## 0.6.0
 
 - Aufgeklappte Bereiche (Abgeschlossen, Schritte, Verlauf, Entschieden) bleiben beim automatischen Aktualisieren offen.
