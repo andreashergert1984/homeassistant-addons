@@ -23,7 +23,7 @@ Or manually: **Settings → Add-ons → Add-on Store → ⋮ → Repositories**,
 
 ## Hausmeister
 
-![Hausmeister board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/board.png)
+![Hausmeister board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/board.png)
 
 Collect wishes and problems on a todo list, by voice or from automations. Claude Code, logged in inside the
 add-on, writes a read-only draft; you approve it, and it is implemented with a snapshot before and watches

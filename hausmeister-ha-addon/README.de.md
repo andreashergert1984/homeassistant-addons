@@ -15,7 +15,7 @@ keinen weiteren Rechner.
 
 Board, Meldungen und Claudes Texte gibt es auf Deutsch und Englisch. Die Sprache folgt Home Assistant oder wird mit der Option `language` festgelegt.
 
-![Ticket-Board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/board.png)
+![Ticket-Board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/board.png)
 
 ## Was es kann
 
@@ -43,19 +43,19 @@ Board, Meldungen und Claudes Texte gibt es auf Deutsch und Englisch. Die Sprache
 **Vorschläge:** Was der Hausmeister an deinem Haus anpassen würde. Was ein Mensch vor Ort tun muss (Batterie,
 Gerät), ist als „machst du selbst“ markiert.
 
-![Vorschläge](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/vorschlaege.png)
+![Vorschläge](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/vorschlaege.png)
 
 | Entwurf zum Freigeben | Neues Ticket |
 | --- | --- |
-| ![Entwurf](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/entwurf.png) | ![Neues Ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/neues-ticket.png) |
+| ![Entwurf](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/entwurf.png) | ![Neues Ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/neues-ticket.png) |
 
 **Auf dem Handy** (hier im dunklen Modus): Übersicht mit Kennzahlen und eine Rückfrage von Claude. Die Antwort
 geht über das Feld im Ticket oder direkt aus der Push-Meldung.
 
 <p>
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-liste.png" alt="Ticketliste auf dem Handy" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/handy-liste.png" alt="Ticketliste auf dem Handy" width="260">
 &nbsp;
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Rückfrage auf dem Handy" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/de/handy-rueckfrage.png" alt="Rückfrage auf dem Handy" width="260">
 </p>
 
 Die Bilder zeigen erfundene Beispieltickets.

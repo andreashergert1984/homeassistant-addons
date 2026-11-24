@@ -16,7 +16,7 @@ other computer is needed.
 The board, the notifications and Claude's texts are available in English and German. The language follows
 Home Assistant or is set with the option `language`.
 
-![Ticket board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/board.png)
+![Ticket board](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/board.png)
 
 ## What it does
 
@@ -41,24 +41,24 @@ Home Assistant or is set with the option `language`.
 
 ## How it looks
 
-The screenshots show the German interface and made-up example tickets.
+The screenshots show made-up example tickets.
 
 **Suggestions:** what the caretaker would change in your house. Things a person has to do on site (battery,
 device) are marked "you do it yourself".
 
-![Suggestions](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/vorschlaege.png)
+![Suggestions](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/suggestions.png)
 
 | Draft to approve | New ticket |
 | --- | --- |
-| ![Draft](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/entwurf.png) | ![New ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/neues-ticket.png) |
+| ![Draft](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/draft.png) | ![New ticket](https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/new-ticket.png) |
 
 **On the phone** (dark mode): overview with key figures and a question from Claude. You answer in the field
 of the ticket or right from the push notification.
 
 <p>
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-liste.png" alt="Ticket list on the phone" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/phone-list.png" alt="Ticket list on the phone" width="260">
 &nbsp;
-<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/handy-rueckfrage.png" alt="Question on the phone" width="260">
+<img src="https://raw.githubusercontent.com/andreashergert1984/homeassistant-addons/main/hausmeister-ha-addon/images/en/phone-question.png" alt="Question on the phone" width="260">
 </p>
 
 ## Requirements
@@ -153,4 +153,4 @@ do not come back.
 - Backups: a git history of the configuration of its own (without databases, logs, login data, model folders
   and files over 20 MB) and, if turned on, a partial HA backup before every implementation.
 
-Full documentation: [DOCS.md](DOCS.md). Changes: [CHANGELOG.md](CHANGELOG.md) (in German).
+Full documentation: [DOCS.md](DOCS.md). Changes: [CHANGELOG.md](CHANGELOG.md).
