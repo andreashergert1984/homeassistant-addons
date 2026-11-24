@@ -313,16 +313,39 @@ $('#addTile').onclick = async () => {
   if (t) { boot.tiles.push(t); renderTiles(); }
 };
 
-// ---------- keyboard wedge (PS/2 scanner etc.) ----------
+// ---------- keyboard wedge (USB/Bluetooth-HID scanner etc.) ----------
+// Der Scanner tippt wie eine Tastatur. Im HA-Panel liegt das Terminal in einem iframe; hat
+// die HA-Oberfläche den Fokus, kommen die Tasten dort an. Ingress hat denselben Ursprung,
+// daher hören wir zusätzlich auf den äußeren Dokumenten mit (jede Taste kommt nur in
+// einem Dokument an, doppelt gezählt wird nichts).
 let buf = '', bufT = 0, bufTimer = null;
-document.addEventListener('keydown', (e) => {
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-  if (e.key === 'Enter') { if (buf) e.preventDefault(); flushBuf(); return; }
+function typingTarget(e) {
+  const t = (e.composedPath && e.composedPath()[0]) || e.target;
+  return t && (['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable);
+}
+function onWedgeKey(e) {
+  if (typingTarget(e)) return;
+  if (e.key === 'Enter') { if (buf) { e.preventDefault(); e.stopPropagation(); } flushBuf(); return; }
   if (e.key.length !== 1 || !/[0-9]/.test(e.key)) return;
   const now = Date.now();
   if (now - bufT > 400) buf = '';
   buf += e.key; bufT = now;
   clearTimeout(bufTimer); bufTimer = setTimeout(flushBuf, 150);
+}
+document.addEventListener('keydown', onWedgeKey, true);
+const outerDocs = [];
+for (let w = window; w !== w.parent; ) {
+  try {
+    w = w.parent; const d = w.document;
+    // Zuhörer eines früheren (neu geladenen) Terminal-Rahmens ersetzen, sonst würde doppelt gebucht.
+    if (d.__vorratWedge) d.removeEventListener('keydown', d.__vorratWedge, true);
+    d.__vorratWedge = onWedgeKey; d.addEventListener('keydown', onWedgeKey, true); outerDocs.push(d);
+  } catch { break; }
+}
+window.addEventListener('pagehide', () => {
+  for (const d of outerDocs) {
+    try { if (d.__vorratWedge === onWedgeKey) { d.removeEventListener('keydown', onWedgeKey, true); d.__vorratWedge = null; } } catch {}
+  }
 });
 function flushBuf() {
   clearTimeout(bufTimer);

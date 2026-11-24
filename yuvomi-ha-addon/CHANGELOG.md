@@ -1,3 +1,7 @@
+## 2.83.0.6
+
+- Handscanner (USB oder Bluetooth-HID, z. B. NETUM L8BL Pro): Scans kommen jetzt auch an, wenn im HA-Panel die HA-Oberfläche um das Terminal den Fokus hat. Das Terminal hört dafür auf den äußeren HA-Rahmen mit (gleicher Ursprung über Ingress); nach einem Neuladen des Rahmens wird nichts doppelt gebucht, in Eingabefeldern bleibt der Scan im Feld.
+
 ## 2.83.0.5
 
 - Kamera umschaltbar (Knopf "Kamera wechseln" im Kamerabild, wird im Geraet gemerkt): Frontkamera fuer ein Wandgeraet, vor dessen Display man den Artikel haelt. Bild der Frontkamera gespiegelt.

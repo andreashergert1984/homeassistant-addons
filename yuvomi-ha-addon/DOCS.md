@@ -69,8 +69,11 @@ add-on was not restarted.
 - **Einlagern:** quantity, best-before date (quick choices or a date) and location.
 - **Zählen:** set the real stock; the fastest way for a first inventory.
 - After 3 minutes without a scan the mode goes back to Auslagern.
-- Scan with the camera or with a keyboard-wedge scanner (USB, PS/2 via an
-  active adapter).
+- Scan with the camera or with a keyboard-wedge scanner (USB, Bluetooth HID,
+  PS/2 via an active adapter). Set the scanner to send Enter after the code, no
+  prefix or suffix. EAN-8 to EAN-14 / UPC are accepted (8 to 14 digits). Inside
+  the HA sidebar the scanner works even when the HA page around the terminal has
+  the focus; while a text field is focused the scan goes into that field.
 - Items without a barcode go on tiles ("Ohne Code", "+ Neu").
 - Unknown barcodes are asked once; the name is suggested from Open Food Facts.
   Switch that off with the option, then no code leaves your network.
