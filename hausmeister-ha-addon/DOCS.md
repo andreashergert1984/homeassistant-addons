@@ -53,18 +53,26 @@ Runs start at the configured times. Without queued tickets Claude is not started
 
 ## Safety
 
-- **Drafts** run with read-only tools: files can be read, Home Assistant can only be queried
-  through `ha-read` (a fixed list of read-only WebSocket commands and GET requests).
+- **Drafts** run with read-only tools: files are read and searched only with Claude's Read, Grep
+  and Glob tools; the shell only has `ha-read`, `cfg-git`, `echo`, `printf` and `date`, no `cat`,
+  `grep`, `jq`, `head`, `tail`, `ls` or `wc`. Home Assistant can only be queried through `ha-read`
+  (a fixed list of read-only WebSocket commands and GET requests), which has its own filters
+  (`--count`, `--json`, `--fields`, `--pick`).
 - **Drafts and inspections run as the user `hausmeister`**, not as root: they cannot write the
-  configuration and cannot read `secrets.yaml` (set to 0600 on start, the only change in the
-  configuration folder), the add-on options, the ticket store or the snapshots. Implementations
-  after approval run as root. `cfg-git` goes through the add-on, which leaves out `secrets.yaml`
-  and the login files in every diff and log. The terminal has no Supervisor token.
+  configuration and cannot read the add-on options, the ticket store or the snapshots.
+  Implementations after approval run as root. `cfg-git` goes through the add-on, which leaves out
+  `secrets.yaml` and the login files in every diff and log. The terminal has no Supervisor token.
+- **The add-on does not change file rights in the configuration folder.** Home Assistant writes
+  `secrets.yaml` and `.storage/core.config_entries` readable for local users (0644), so drafts keep
+  away from them through Claude's deny rules and the missing shell, not through file rights.
+  0.8.1 had set `secrets.yaml` to 0600; 0.8.2 sets it back to 0644 once (only if it is still 0600
+  and owned by root) and never touches it again.
 - **Claude never gets the Supervisor token.** `ha-read` and `ha-api` talk to a local proxy in the
   add-on with a one-time token per call. In a draft or inspection that token only reads; in an
   implementation it may write, but never reaches the Supervisor API, the services `hassio.*`,
   `shell_command.*` and `homeassistant.stop`, users, tokens or the events of the add-on.
-- **Closed in every phase:** `secrets.yaml`, the login files in `.storage`, `core.config_entries`,
+- **Closed in every phase:** `secrets.yaml` (in every folder), the login files in `.storage`,
+  `core.config_entries`, `.storage/*credential*`,
   the login of Claude, the snapshot repository, `/proc`, the add-on code and `curl`, `wget`, `nc`.
   Web pages only from the Home Assistant documentation and community and from GitHub. `cfg-git`
   checks every argument (no options that write files or run programs).
@@ -241,20 +249,27 @@ Läufe starten zu den eingestellten Zeiten. Steht nichts an, wird Claude gar nic
 
 ### Sicherheit
 
-- **Entwürfe** laufen mit lesenden Werkzeugen: Dateien lesen, Home Assistant nur über `ha-read`
-  abfragen (eine feste Liste lesender WebSocket-Befehle und GET-Anfragen).
+- **Entwürfe** laufen mit lesenden Werkzeugen: Dateien nur mit den Werkzeugen Read, Grep und Glob
+  von Claude lesen und durchsuchen; die Shell kennt nur `ha-read`, `cfg-git`, `echo`, `printf` und
+  `date`, kein `cat`, `grep`, `jq`, `head`, `tail`, `ls` oder `wc`. Home Assistant nur über
+  `ha-read` abfragen (eine feste Liste lesender WebSocket-Befehle und GET-Anfragen), mit eigenen
+  Filtern (`--count`, `--json`, `--fields`, `--pick`).
 - **Entwürfe und Rundgänge laufen als Benutzer `hausmeister`**, nicht als root: Sie können die
-  Konfiguration nicht schreiben und `secrets.yaml` (beim Start auf 0600 gesetzt, die einzige
-  Änderung im Konfigurationsordner), die Add-on-Optionen, die Ticketdaten und die Sicherungen nicht
+  Konfiguration nicht schreiben und die Add-on-Optionen, die Ticketdaten und die Sicherungen nicht
   lesen. Umsetzungen nach Freigabe laufen als root. `cfg-git` läuft über das Add-on, das
   `secrets.yaml` und die Anmeldedateien in jedem Diff und Log auslässt. Das Terminal hat kein
   Supervisor-Token.
+- **Das Add-on ändert keine Dateirechte im Konfigurationsordner.** Home Assistant schreibt
+  `secrets.yaml` und `.storage/core.config_entries` für lokale Benutzer lesbar (0644); Entwürfe
+  bleiben davon weg durch die Sperrregeln von Claude und die fehlende Shell, nicht durch
+  Dateirechte. 0.8.1 hatte `secrets.yaml` auf 0600 gesetzt; 0.8.2 setzt die Datei einmalig auf 0644
+  zurück (nur wenn sie noch 0600 hat und root gehört) und fasst sie danach nie wieder an.
 - **Claude bekommt nie das Supervisor-Token.** `ha-read` und `ha-api` sprechen mit einem lokalen
   Proxy im Add-on, mit einem Einmal-Token je Aufruf. Im Entwurf und beim Rundgang darf es nur lesen;
   in der Umsetzung auch schreiben, aber nie die Supervisor-API, die Dienste `hassio.*`,
   `shell_command.*` und `homeassistant.stop`, Benutzer, Tokens oder die Ereignisse des Add-ons.
-- **In jeder Phase gesperrt:** `secrets.yaml`, die Anmeldedateien in `.storage`,
-  `core.config_entries`, die Anmeldung von Claude, das Sicherungs-Repository, `/proc`, der Code des
+- **In jeder Phase gesperrt:** `secrets.yaml` (in jedem Ordner), die Anmeldedateien in `.storage`,
+  `core.config_entries`, `.storage/*credential*`, die Anmeldung von Claude, das Sicherungs-Repository, `/proc`, der Code des
   Add-ons sowie `curl`, `wget`, `nc`. Webseiten nur aus der Home-Assistant-Doku und -Community und
   von GitHub. `cfg-git` prüft jedes Argument (keine Optionen, die Dateien schreiben oder Programme
   starten).

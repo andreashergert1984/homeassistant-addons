@@ -9,6 +9,7 @@ const path = require('path');
 const ha = require('../lib/ha');
 const i18n = require('../lib/i18n');
 const policy = require('../lib/policy');
+const cli = require('../lib/cliopts');
 
 // Language of the server that started Claude (HM_LANG), English otherwise.
 i18n.setLanguage(process.env.HM_LANG || 'en');
@@ -18,7 +19,7 @@ const MODE = process.env.HA_TOOL_MODE || (path.basename(process.argv[1]).include
 
 
 function usage() {
-  const common = ['states', 'state', 'get', 'ws', 'template', 'log', 'check'].map((k) => tr(`cli.usage.${k}`));
+  const common = ['states', 'state', 'get', 'ws', 'template', 'log', 'check', 'options'].map((k) => tr(`cli.usage.${k}`));
   const write = ['ws_write', 'rest', 'reload', 'restart'].map((k) => tr(`cli.usage.${k}`));
   console.error([...common, ...(MODE === 'write' ? write : [])].join('\n'));
   process.exit(2);
@@ -39,15 +40,15 @@ function apiPath(raw) {
 const out = (v) => process.stdout.write(`${typeof v === 'string' ? v : JSON.stringify(v, null, 1)}\n`);
 
 async function main() {
-  const [cmd, ...a] = process.argv.slice(2);
+  // --count, --json, --fields a,b and --pick <path> replace jq, grep and wc in drafts.
+  const o = cli.parseOpts(process.argv.slice(2));
+  if (o.error) { console.error(tr('cli.option_value', { option: o.error })); process.exit(2); }
+  const [cmd, ...a] = o.pos;
+  const shaped = (v) => out(cli.shape(v, o));
   switch (cmd) {
-    case 'states': {
-      const list = await ha.core('GET', '/states');
-      const f = a[0];
-      return out(list.filter((s) => !f || s.entity_id.includes(f)).map((s) => `${s.entity_id}\t${s.state}\t${s.attributes.friendly_name || ''}`).join('\n'));
-    }
-    case 'state': if (!a[0]) usage(); return out(await ha.core('GET', apiPath(`/states/${a[0]}`)));
-    case 'get': if (!a[0]) usage(); return out(await ha.core('GET', apiPath(a[0])));
+    case 'states': return out(cli.states(await ha.core('GET', '/states'), a[0], o));
+    case 'state': if (!a[0]) usage(); return shaped(await ha.core('GET', apiPath(`/states/${a[0]}`)));
+    case 'get': if (!a[0]) usage(); return shaped(await ha.core('GET', apiPath(a[0])));
     case 'template': if (!a[0]) usage(); return out(await ha.core('POST', '/template', { template: a.join(' ') }, { text: true }));
     case 'log': {
       const n = Number(a[0] || 200);
@@ -58,12 +59,12 @@ async function main() {
     case 'ws': {
       if (!a[0]) usage();
       if (MODE === 'read' && !policy.readWsAllowed(a[0])) { console.error(tr('cli.ws_not_allowed', { type: a[0] })); process.exit(3); }
-      return out(await ha.ws(a[0], parseJson(a[1])));
+      return shaped(await ha.ws(a[0], parseJson(a[1])));
     }
     case 'rest': {
       if (MODE === 'read') { console.error(tr('cli.not_in_draft')); process.exit(3); }
       if (a.length < 2) usage();
-      return out(await ha.core(a[0].toUpperCase(), apiPath(a[1]), a[2] === undefined ? undefined : parseJson(a[2])));
+      return shaped(await ha.core(a[0].toUpperCase(), apiPath(a[1]), a[2] === undefined ? undefined : parseJson(a[2])));
     }
     case 'reload': {
       if (MODE === 'read') { console.error(tr('cli.not_in_draft')); process.exit(3); }

@@ -1,3 +1,15 @@
+## 0.8.2
+
+No changes to file rights in the configuration of Home Assistant.
+
+- The add-on no longer changes rights in the configuration folder. Home Assistant creates `secrets.yaml` and writes `.storage` files such as `core.config_entries` with 0644 (only its private auth stores with 0600), and the add-on keeps it that way.
+- One-time restore: 0.8.1 had set `secrets.yaml` to 0600. On the first start of 0.8.2 it is set back to 0644 if it is still 0600 and owned by root; a marker in `/data` records this, and the file is never touched again. A later 0600 set by the owner stays.
+- The warning about `core.config_entries` on every start is gone; instead one info line, once, explains that Home Assistant writes these files with 0644 and that drafts keep away from them through Claude's deny rules.
+- Because these files stay readable for the draft user, the shell of drafts and inspections no longer opens files: only `ha-read`, `cfg-git`, `echo`, `printf` and `date`. `jq`, `grep`, `head`, `tail`, `wc`, `ls`, `cut` and `tr` are gone. Files are read and searched with the Read, Grep and Glob tools, to which the deny rules apply (checked with Claude Code 2.1.326: Grep and Glob refuse a denied path and leave denied files out of searches).
+- New deny rule in every phase: `.storage/*credential*`.
+- `ha-read` (and `ha-api`) get built-in filters for `states`, `state`, `get` and `ws`: `--count`, `--json`, `--fields a,b` (dotted paths such as `attributes.friendly_name`) and `--pick <path>` (e.g. `data.0.id`, `*.entity_id`).
+- Implementations after approval are unchanged: root, full shell, write access to the configuration.
+
 ## 0.8.1
 
 Drafts and inspections run as their own user.

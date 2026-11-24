@@ -158,8 +158,10 @@ do not come back.
 - From outside the board (todo list, events, notification buttons) only active admins count, at most 10 new
   tickets per hour, and immediate implementation needs `allow_immediate_from_outside`.
 - Drafts and inspections run as the unprivileged user `hausmeister`: no write access to the configuration, no
-  access to `secrets.yaml` (set to 0600 on start), the add-on options or the snapshots. The terminal has no
-  Supervisor token.
+  access to the add-on options or the snapshots, and a shell without file access (only `ha-read`, `cfg-git`,
+  `echo`, `printf`, `date`); files are read only with Claude's Read, Grep and Glob, where `secrets.yaml` and the
+  login files are blocked. The add-on does not change file rights in the configuration folder. The terminal has
+  no Supervisor token.
 - In an implementation Claude still has a shell as root in the add-on, so this is no sandbox.
 - Backups: a git history of the configuration of its own (without databases, logs, login data, model folders
   and files over 20 MB) and, if turned on, a partial HA backup before every implementation.

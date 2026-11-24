@@ -41,7 +41,7 @@ test('Benutzer aus /etc/passwd, root zählt nicht', () => {
   assert.strictEqual(perms.lookupUser('hausmeister', 'p', () => { throw new Error('nope'); }), null);
 });
 
-test('Rechte vorbereiten: /data/home an hausmeister, Rest root, nur secrets.yaml in der Konfiguration', () => {
+test('Rechte vorbereiten: /data/home an hausmeister, Rest root, in der Konfiguration nichts', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hm-rights-'));
   try {
     const p = (...x) => path.join(tmp, ...x);
@@ -67,13 +67,15 @@ test('Rechte vorbereiten: /data/home an hausmeister, Rest root, nur secrets.yaml
     // No root in the test: lchown is injected and changes the uid seen by lstat.
     const owned = new Map();
     const chowned = [];
+    const chmodded = [];
     const fsx = {
       ...fs,
+      chmodSync: (f, m) => { chmodded.push(f); fs.chmodSync(f, m); },
       lstatSync: (f) => { const st = fs.lstatSync(f); const o = owned.get(f); return o ? Object.assign(Object.create(Object.getPrototypeOf(st)), st, o) : st; },
       lchownSync: (f, uid, gid) => { chowned.push(f); owned.set(f, { uid, gid }); },
     };
     const user = { name: 'hausmeister', uid: 4242, gid: 4243 };
-    const paths = { home: p('home'), work: p('work'), claudeMd: p('work', 'CLAUDE.md'), wissen: p('wissen.md'), gitDir: p('configgit'), config: p('config'), private: [p('options.json'), p('state.json'), p('fehlt.json')] };
+    const paths = { home: p('home'), work: p('work'), claudeMd: p('work', 'CLAUDE.md'), wissen: p('wissen.md'), gitDir: p('configgit'), config: p('config'), dataDir: tmp, private: [p('options.json'), p('state.json'), p('fehlt.json')] };
     const log = perms.prepare(user, paths, { fsx });
     assert.ok(chowned.includes(p('home')) && chowned.includes(p('home', '.claude', '.credentials.json')), 'Login gehört hausmeister');
     assert.ok(chowned.every((f) => f.startsWith(p('home'))), 'nur /data/home');
@@ -83,22 +85,98 @@ test('Rechte vorbereiten: /data/home an hausmeister, Rest root, nur secrets.yaml
     assert.strictEqual(mode(p('configgit')), 0o700, 'Schnappschüsse nur root');
     assert.strictEqual(mode(p('options.json')), 0o600);
     assert.strictEqual(mode(p('state.json')), 0o600);
-    assert.strictEqual(mode(p('config', 'secrets.yaml')), 0o600);
+    assert.strictEqual(mode(p('config', 'secrets.yaml')), 0o644, 'secrets.yaml wie von Home Assistant angelegt');
     assert.strictEqual(mode(p('config', 'configuration.yaml')), 0o644, 'sonst nichts in der Konfiguration geändert');
-    assert.strictEqual(mode(p('config', '.storage', 'core.config_entries')), 0o644, '.storage nur geprüft');
-    assert.strictEqual(log.filter((l) => /secrets\.yaml set to 0600/.test(l)).length, 1);
-    assert.ok(log.some((l) => /warning: .*core\.config_entries/.test(l)), 'lesbare .storage-Datei gemeldet');
-    assert.ok(!log.some((l) => /\.storage\/auth /.test(l)), 'auth ist 0600');
+    assert.strictEqual(mode(p('config', '.storage', 'core.config_entries')), 0o644, '.storage unverändert');
+    assert.ok(chmodded.every((f) => !perms.inside(f, p('config'))), `kein chmod in der Konfiguration: ${chmodded}`);
+    assert.ok(!log.some((l) => /warning|0600/.test(l)), 'keine Warnung mehr');
+    assert.strictEqual(log.filter((l) => /^info: .*core\.config_entries.*0644.*deny rules/.test(l)).length, 1, 'Hinweis einmal');
     // Idempotent: a second start changes nothing and does not log secrets.yaml again.
     chowned.length = 0;
     const again = perms.prepare(user, paths, { fsx });
     assert.deepStrictEqual(chowned, []);
-    assert.ok(!again.some((l) => /secrets/.test(l)));
+    assert.ok(!again.some((l) => /secrets|core\.config_entries/.test(l)), 'Hinweis nur beim ersten Start');
     // A root login in the terminal leaves a root file; the next draft gives it back.
     fs.writeFileSync(p('home', '.claude', 'neu.json'), '{}');
     assert.strictEqual(perms.chownTree(p('home'), 4242, 4243, fsx), 1);
     assert.deepStrictEqual(perms.prepare(null, paths, { fsx }), [], 'ohne Benutzer nichts');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('secrets.yaml: Rücknahme von 0.8.1 genau einmal, danach nie wieder angefasst', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hm-restore-'));
+  try {
+    const config = path.join(tmp, 'config');
+    const data = path.join(tmp, 'data');
+    fs.mkdirSync(config); fs.mkdirSync(data);
+    const sec = path.join(config, 'secrets.yaml');
+    fs.writeFileSync(sec, 'pw: x\n');
+    fs.chmodSync(sec, 0o600);
+    // The test does not run as root: stat reports uid 0 for the file, chmod is recorded.
+    const chmods = [];
+    let uid = 0;
+    const fsx = { ...fs, statSync: (f) => { const st = fs.statSync(f); return f === sec ? Object.assign(Object.create(Object.getPrototypeOf(st)), st, { uid }) : st; },
+      chmodSync: (f, m) => { chmods.push([f, m]); fs.chmodSync(f, m); } };
+    const line = perms.restoreSecretsOnce(config, data, fsx);
+    assert.match(line, /secrets\.yaml set back to 0644/);
+    assert.strictEqual(mode(sec), 0o644);
+    assert.deepStrictEqual(chmods, [[sec, 0o644]]);
+    assert.ok(fs.existsSync(path.join(data, perms.MARKER_SECRETS)), 'Markierung geschrieben');
+    // The owner sets 0600 himself later: the add-on leaves it alone.
+    fs.chmodSync(sec, 0o600);
+    chmods.length = 0;
+    assert.strictEqual(perms.restoreSecretsOnce(config, data, fsx), null);
+    assert.deepStrictEqual(chmods, []);
+    assert.strictEqual(mode(sec), 0o600);
+    // Without a marker, but not owned by root or not 0600: nothing changes, the marker is written.
+    for (const [u, m] of [[1000, 0o600], [0, 0o640]]) {
+      fs.rmSync(path.join(data, perms.MARKER_SECRETS));
+      uid = u;
+      fs.chmodSync(sec, m);
+      assert.strictEqual(perms.restoreSecretsOnce(config, data, fsx), null);
+      assert.strictEqual(mode(sec), m);
+      assert.ok(fs.existsSync(path.join(data, perms.MARKER_SECRETS)));
+    }
+    assert.deepStrictEqual(chmods, []);
+    // No secrets.yaml at all.
+    fs.rmSync(path.join(data, perms.MARKER_SECRETS));
+    fs.rmSync(sec);
+    assert.strictEqual(perms.restoreSecretsOnce(config, data, fsx), null);
+    // Notice once.
+    assert.match(perms.configEntriesNoticeOnce(data, fsx), /^info: /);
+    assert.strictEqual(perms.configEntriesNoticeOnce(data, fsx), null);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('Wächter: chmod/chown nur unter /data und /app, nie in der Konfiguration', () => {
+  // prepare refuses a path in the configuration folder, whatever the caller passes.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hm-guard-'));
+  try {
+    const config = path.join(tmp, 'config');
+    fs.mkdirSync(config);
+    const user = { name: 'hausmeister', uid: 4242, gid: 4243 };
+    const fsx = { ...fs, lchownSync: () => {} };
+    for (const bad of [{ home: path.join(config, 'home') }, { home: path.join(tmp, 'h'), private: [path.join(config, 'secrets.yaml')] }, { home: path.join(tmp, 'h'), wissen: path.join(config, 'x.md') }]) {
+      assert.throws(() => perms.prepare(user, { config, ...bad }, { fsx }), /configuration folder/);
+    }
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  // Defaults of the paths handed to chmod/chown: only /data and /app.
+  const runnerSrc = fs.readFileSync(path.join(APP, 'lib', 'runner.js'), 'utf8');
+  const serverSrc = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
+  const permsSrc = fs.readFileSync(path.join(APP, 'lib', 'perms.js'), 'utf8');
+  assert.ok(!/\bchmod|\bchown/.test(runnerSrc), 'runner.js ändert keine Rechte');
+  const serverCalls = serverSrc.match(/\b\w*(chmod|chown)\w*\(/gi) || [];
+  assert.deepStrictEqual(serverCalls, ['chownTree('], 'server.js: nur chownTree');
+  assert.ok(/perms\.chownTree\(paths\.home,/.test(serverSrc), 'nur für /data/home');
+  for (const m of serverSrc.matchAll(/const (OPTIONS_FILE|HOME_DIR|WISSEN|STATE_FILE|WORK_DIR|DATA_DIR) = process\.env\.\w+ \|\| '([^']+)'/g)) {
+    assert.ok(m[2] === '/data' || m[2].startsWith('/data/'), `${m[1]} = ${m[2]}`);
+  }
+  // In perms.js chmodSync appears in ensureMode and once in the restore of secrets.yaml.
+  const chmodCalls = permsSrc.match(/chmodSync\(/g) || [];
+  assert.strictEqual(chmodCalls.length, 2);
+  assert.ok(/fsx\.chmodSync\(p, 0o644\)/.test(permsSrc.slice(permsSrc.indexOf('function restoreSecretsOnce'), permsSrc.indexOf('function configEntriesNoticeOnce'))), 'Rücknahme ist die einzige Ausnahme');
+  assert.ok(!/ensureMode\([^)]*config/.test(permsSrc), 'ensureMode nie auf config');
+  assert.strictEqual(require('../lib/git').WORK, process.env.HM_CONFIG_DIR || '/homeassistant');
 });
 
 // Snapshot repository with secrets in it, as /data/configgit.

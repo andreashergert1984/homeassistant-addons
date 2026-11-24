@@ -28,6 +28,7 @@ const WISSEN = process.env.HM_WISSEN || '/data/wissen.md';
 // Start file of the terminal shell; root-owned outside /data/home (which the draft user owns).
 const TERMINAL_RC = process.env.HM_TERMINAL_RC || '/data/terminal.rc';
 const STATE_FILE = process.env.HM_STATE || '/data/state.json';
+const DATA_DIR = process.env.HM_DATA_DIR || '/data'; // markers of one-time steps
 const MAX_INTAKE_PER_HOUR = 10;
 const tr = i18n.t;
 const { ACTOR, REASON } = L;
@@ -92,7 +93,7 @@ runner.afterRun = () => exportWissen();
 // paths of prepareRights, also used by the tests with temp folders.
 function rightsPaths() {
   return {
-    home: HOME_DIR, work: WORK_DIR, claudeMd: path.join(WORK_DIR, 'CLAUDE.md'), wissen: WISSEN, gitDir: git.GIT_DIR, config: git.WORK,
+    home: HOME_DIR, work: WORK_DIR, claudeMd: path.join(WORK_DIR, 'CLAUDE.md'), wissen: WISSEN, gitDir: git.GIT_DIR, config: git.WORK, dataDir: DATA_DIR,
     private: [OPTIONS_FILE, STATE_FILE, runner.baselineFile],
   };
 }

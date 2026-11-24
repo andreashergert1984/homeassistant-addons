@@ -177,6 +177,7 @@
  "cli.usage.template": "ha-read template <vorlage>     Jinja-Vorlage auswerten",
  "cli.usage.log": "ha-read log [zeilen]           Log von Home Assistant Core (Vorgabe 200 Zeilen)",
  "cli.usage.check": "ha-read check                  Konfiguration prüfen",
+ "cli.usage.options": "Optionen für states, state, get, ws: --count (Anzahl), --json, --fields a,b (Felder, auch attributes.x), --pick <pfad> (z. B. data.0.id oder *.entity_id)",
  "cli.usage.ws_write": "ha-api ws <typ> [json]         beliebiger WebSocket-Befehl",
  "cli.usage.rest": "ha-api rest <METHODE> <pfad> [json]",
  "cli.usage.reload": "ha-api reload <domain>         z. B. automation, script, template, core, all",
@@ -383,5 +384,6 @@
  "cli.cfg_git_only": "cfg-git: nur {list}",
  "cli.cfg_git_refused": "cfg-git: Argument nicht erlaubt: {arg}",
  "cli.cfg_git_proxy_failed": "cfg-git: Der Hausmeister-Server hat nicht geantwortet (HTTP {status})",
- "cli.path_not_allowed": "Pfad nicht erlaubt: {path}"
+ "cli.path_not_allowed": "Pfad nicht erlaubt: {path}",
+ "cli.option_value": "Option {option} braucht einen Wert."
 }

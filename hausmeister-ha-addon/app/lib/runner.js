@@ -20,8 +20,13 @@ const HOME = process.env.HM_HOME_DIR || '/data/home';
 
 // Permission rules of Claude Code 2.1.x: "//" starts an absolute path, "Bash(x:*)" a command prefix.
 const WEB = ['home-assistant.io', 'www.home-assistant.io', 'github.com', 'raw.githubusercontent.com', 'community.home-assistant.io'].map((d) => `WebFetch(domain:${d})`);
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)',
-  'Bash(echo:*)', 'Bash(printf:*)', 'Bash(cut:*)', 'Bash(tr:*)', 'Bash(date:*)'];
+// Drafts and inspections: secrets.yaml and core.config_entries stay readable for the draft user
+// (Home Assistant writes them with 0644), so the shell gets no command that opens files. Files are
+// read and searched only with Read, Grep and Glob, to which the deny rules below apply (checked
+// with 2.1.326: Grep and Glob refuse a denied path and leave denied files out of a search).
+// ha-read and cfg-git go through the proxy; echo, printf and date open no files.
+const READ_BASH = ['ha-read', 'cfg-git', 'echo', 'printf', 'date'];
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', ...WEB, ...READ_BASH.map((c) => `Bash(${c}:*)`)];
 const WRITE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash', `Edit(/${WISSEN})`];
 // Settings, hooks and MCP servers only from the command line and /data/work (root), never from
 // /data/home, which the draft user can write: a root implementation must not run its hooks.
@@ -30,7 +35,7 @@ const SETTINGS_ARGS = ['--setting-sources', 'project', '--strict-mcp-config'];
 // (environment of other processes) and network tools in the shell.
 function denyRules(work = git.WORK) {
   const abs = (p) => `/${path.resolve(p)}`;
-  const files = [`${abs(work)}/secrets.yaml`, `${abs(work)}/**/secrets.yaml`, `${abs(work)}/.storage/auth*`, `${abs(work)}/.storage/core.config_entries`,
+  const files = [`${abs(work)}/secrets.yaml`, `${abs(work)}/**/secrets.yaml`, `${abs(work)}/.storage/auth*`, `${abs(work)}/.storage/core.config_entries`, `${abs(work)}/.storage/*credential*`,
     `${abs(HOME)}/.claude/**`, `${abs(git.GIT_DIR)}/**`, '//proc/**', '//app/**'];
   return [...files.map((f) => `Read(${f})`), ...files.map((f) => `Edit(${f})`), 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(nc:*)'];
 }
@@ -487,4 +492,4 @@ class Runner {
   }
 }
 
-module.exports = { Runner, promptFor, READ_TOOLS, WRITE_TOOLS, SETTINGS_ARGS, denyRules, childEnv, spawnOptions, configFiles, interpret: L.interpretResult };
+module.exports = { Runner, promptFor, READ_BASH, READ_TOOLS, WRITE_TOOLS, SETTINGS_ARGS, denyRules, childEnv, spawnOptions, configFiles, interpret: L.interpretResult };

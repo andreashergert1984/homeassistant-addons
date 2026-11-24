@@ -176,6 +176,16 @@ test('Proxy: Lese- und Schreibmodus, Token je Phase, ha-read über den Proxy', a
     assert.notStrictEqual(r.code, 0, 'Lesetoken kann nicht schalten, auch nicht mit ha-api');
     r = await helper('read', read, 'log', '1');
     assert.strictEqual(r.out.trim(), 'line2');
+    // 0.8.2: filters instead of jq, grep and wc.
+    r = await helper('read', read, 'states', 'light.', '--count');
+    assert.strictEqual(r.out.trim(), '1', r.err);
+    r = await helper('read', read, 'states', '--json', '--fields', 'entity_id,state');
+    assert.deepStrictEqual(JSON.parse(r.out), [{ entity_id: 'light.a', state: 'on' }]);
+    r = await helper('read', read, 'get', '/states', '--pick', '0.entity_id');
+    assert.strictEqual(r.out.trim(), 'light.a');
+    r = await helper('read', read, 'get', '/states', '--pick');
+    assert.strictEqual(r.code, 2);
+    assert.match(r.err, /--pick needs a value/);
     proxy.revoke(read);
     assert.strictEqual((await rawRequest(url, 'GET', '/core/api/states', read)).status, 401, 'nach dem Lauf ungültig');
   } finally { proxy.close(); }
@@ -193,10 +203,16 @@ test('Werkzeuge für Claude: kein cat/sort/uniq, WebFetch nur Doku, Sperrregeln,
     for (const d of ['home-assistant.io', 'www.home-assistant.io', 'github.com', 'raw.githubusercontent.com', 'community.home-assistant.io']) assert.ok(list.includes(`WebFetch(domain:${d})`), d);
     assert.strictEqual(list.filter((x) => x.startsWith('WebFetch')).length, 5);
   }
-  for (const t of ['Bash(cat:*)', 'Bash(sort:*)', 'Bash(uniq:*)']) assert.ok(!runner.READ_TOOLS.includes(t), t);
+  for (const c of ['cat', 'sort', 'uniq', 'grep', 'head', 'tail', 'jq', 'ls', 'wc', 'cut', 'tr', 'find', 'sed', 'awk', 'less', 'python3', 'node']) {
+    assert.ok(!runner.READ_TOOLS.some((t) => t === `Bash(${c}:*)` || t === `Bash(${c})`), c);
+  }
+  // 0.8.2: in drafts the shell opens no files; only the proxy helpers and pure output.
+  assert.deepStrictEqual(runner.READ_TOOLS.filter((t) => t.startsWith('Bash')), ['Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(echo:*)', 'Bash(printf:*)', 'Bash(date:*)']);
+  assert.ok(!runner.READ_TOOLS.includes('Bash'), 'kein freies Bash im Entwurf');
+  for (const t of ['Read', 'Grep', 'Glob']) assert.ok(runner.READ_TOOLS.includes(t), t);
   assert.ok(runner.WRITE_TOOLS.includes('Edit(//data/wissen.md)'), 'Wissen bearbeitbar');
   const deny = runner.denyRules('/homeassistant');
-  for (const r of ['Read(//homeassistant/secrets.yaml)', 'Edit(//homeassistant/secrets.yaml)', 'Read(//homeassistant/.storage/auth*)', 'Read(//homeassistant/.storage/core.config_entries)',
+  for (const r of ['Read(//homeassistant/secrets.yaml)', 'Edit(//homeassistant/secrets.yaml)', 'Read(//homeassistant/.storage/auth*)', 'Read(//homeassistant/.storage/core.config_entries)', 'Read(//homeassistant/.storage/*credential*)', 'Read(//homeassistant/**/secrets.yaml)',
     'Read(//data/home/.claude/**)', 'Read(//data/configgit/**)', 'Read(//proc/**)', 'Read(//app/**)', 'Edit(//app/**)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(nc:*)']) {
     assert.ok(deny.includes(r), r);
   }
@@ -227,9 +243,9 @@ test('Benachrichtigungen mit Nonce, Admins, Grenze je Stunde, flüchtige Dateien
   assert.ok(L.isVolatile('zigbee2mqtt/coordinator.json', ['zigbee2mqtt/coordinator.json']));
 });
 
-test('Add-on-Konfiguration 0.8.1: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
+test('Add-on-Konfiguration 0.8.2: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
   const cfg = fs.readFileSync(path.join(ROOT, 'config.yaml'), 'utf8');
-  assert.match(cfg, /^version: "0\.8\.1"$/m);
+  assert.match(cfg, /^version: "0\.8\.2"$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: false$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: bool$/m);
   for (const x of ['home/.claude/.credentials.json', 'home/.claude/projects', 'home/.claude/projects/*', 'configgit', 'configgit/*']) assert.ok(cfg.includes(`  - "${x}"\n`), x);

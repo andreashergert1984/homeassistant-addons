@@ -157,8 +157,10 @@ kommen nicht wieder.
 - Von außerhalb des Boards (To-do-Liste, Ereignisse, Knöpfe in Meldungen) zählen nur aktive Admins, höchstens
   10 neue Tickets je Stunde, und Sofort-Umsetzung braucht `allow_immediate_from_outside`.
 - Entwürfe und Rundgänge laufen als eigener Benutzer `hausmeister` ohne Rechte: kein Schreibzugriff auf die
-  Konfiguration, kein Zugriff auf `secrets.yaml` (beim Start auf 0600 gesetzt), die Add-on-Optionen oder die
-  Sicherungen. Das Terminal hat kein Supervisor-Token.
+  Konfiguration, kein Zugriff auf die Add-on-Optionen oder die Sicherungen und eine Shell ohne Dateizugriff (nur
+  `ha-read`, `cfg-git`, `echo`, `printf`, `date`); Dateien liest Claude nur mit Read, Grep und Glob, dort sind
+  `secrets.yaml` und die Anmeldedateien gesperrt. Das Add-on ändert keine Dateirechte im Konfigurationsordner.
+  Das Terminal hat kein Supervisor-Token.
 - In der Umsetzung hat Claude weiterhin eine Shell als root im Add-on, das ist also keine Sandbox.
 - Sicherungen: eigener Git-Verlauf der Konfiguration (ohne Datenbanken, Logs, Anmeldedaten, Modellordner und
   Dateien über 20 MB) und, wenn eingeschaltet, eine HA-Teilsicherung vor jeder Umsetzung.
