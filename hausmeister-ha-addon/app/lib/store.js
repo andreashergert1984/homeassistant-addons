@@ -32,8 +32,10 @@ class Store {
   }
 
   save() {
+    // Only root reads the store (0600); draft and inspection run as another user.
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 1));
+    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 1), { mode: 0o600 });
+    fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, this.file);
   }
 

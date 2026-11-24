@@ -26,11 +26,17 @@ RUN apt-get update \
     && npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
+# Draft and inspection run as this user (fixed ids; 1000 is "node" of the base image).
+# The implementation after approval stays root.
+RUN groupadd -g 1001 hausmeister \
+    && useradd -u 1001 -g 1001 -d /data/home -M -s /usr/sbin/nologin hausmeister
+
 COPY app /app
 RUN printf '#!/bin/sh\nexec env HA_TOOL_MODE=read node /app/bin/ha.js "$@"\n' > /usr/local/bin/ha-read \
     && printf '#!/bin/sh\nexec env HA_TOOL_MODE=write node /app/bin/ha.js "$@"\n' > /usr/local/bin/ha-api \
     && printf '#!/bin/sh\nexec node /app/bin/cfg-git.js "$@"\n' > /usr/local/bin/cfg-git \
-    && chmod +x /usr/local/bin/ha-read /usr/local/bin/ha-api /usr/local/bin/cfg-git /app/run.sh
+    && chmod +x /usr/local/bin/ha-read /usr/local/bin/ha-api /usr/local/bin/cfg-git /app/run.sh \
+    && chown -R root:root /app && chmod -R go-w /app
 
 ENV HOME=/data/home \
     DISABLE_AUTOUPDATER=1 \

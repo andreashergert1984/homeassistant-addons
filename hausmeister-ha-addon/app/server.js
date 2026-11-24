@@ -3,6 +3,7 @@
 
 const http = require('http');
 const net = require('net');
+const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +12,8 @@ const i18n = require('./lib/i18n');
 const ha = require('./lib/ha');
 const git = require('./lib/git');
 const { Store } = require('./lib/store');
-const { Runner } = require('./lib/runner');
+const { Runner, childEnv } = require('./lib/runner');
+const perms = require('./lib/perms');
 const { createProxy } = require('./lib/proxy');
 const policy = require('./lib/policy');
 
@@ -23,6 +25,9 @@ const PUBLIC = path.join(__dirname, 'public');
 const WORK_DIR = process.env.HM_WORK_DIR || '/data/work';
 const HOME_DIR = process.env.HM_HOME_DIR || '/data/home';
 const WISSEN = process.env.HM_WISSEN || '/data/wissen.md';
+// Start file of the terminal shell; root-owned outside /data/home (which the draft user owns).
+const TERMINAL_RC = process.env.HM_TERMINAL_RC || '/data/terminal.rc';
+const STATE_FILE = process.env.HM_STATE || '/data/state.json';
 const MAX_INTAKE_PER_HOUR = 10;
 const tr = i18n.t;
 const { ACTOR, REASON } = L;
@@ -64,10 +69,10 @@ function exportWissen({ share = SHARE, wissen = WISSEN } = {}) {
 
 // Files Claude and the terminal read, in the active language: rules (CLAUDE.md), the
 // greeting of the login terminal and, if missing, the knowledge file of the house.
-function writeRuntimeFiles({ work = WORK_DIR, home = HOME_DIR, share = SHARE, wissen = WISSEN } = {}) {
+function writeRuntimeFiles({ work = WORK_DIR, rc = TERMINAL_RC, share = SHARE, wissen = WISSEN } = {}) {
   const lang = i18n.language();
   writeFile(path.join(work, 'CLAUDE.md'), fs.readFileSync(path.join(__dirname, 'prompt', `regeln.${lang}.md`), 'utf8'));
-  writeFile(path.join(home, '.bash_profile'), `cd ${work}\necho\necho ${JSON.stringify(tr('terminal.hello'))}\necho ${JSON.stringify(tr('terminal.helpers'))}\necho\n`);
+  writeFile(rc, `[ -r /etc/bash.bashrc ] && . /etc/bash.bashrc\ncd ${work}\necho\necho ${JSON.stringify(tr('terminal.hello'))}\necho ${JSON.stringify(tr('terminal.helpers'))}\necho\n`);
   if (!fs.existsSync(wissen)) {
     // Once: take over the file from before 0.8.0.
     const old = path.join(share, 'WISSEN.md');
@@ -77,11 +82,57 @@ function writeRuntimeFiles({ work = WORK_DIR, home = HOME_DIR, share = SHARE, wi
 }
 
 fs.mkdirSync(SHARE, { recursive: true });
-const store = new Store(process.env.HM_STATE || '/data/state.json', path.join(SHARE, 'tickets'));
+const store = new Store(STATE_FILE, path.join(SHARE, 'tickets'));
 const runner = new Runner(store, opts);
 const proxy = createProxy();
 runner.proxy = proxy;
 runner.afterRun = () => exportWissen();
+
+// ---- rights: draft and inspection as the user hausmeister ----------------------
+// paths of prepareRights, also used by the tests with temp folders.
+function rightsPaths() {
+  return {
+    home: HOME_DIR, work: WORK_DIR, claudeMd: path.join(WORK_DIR, 'CLAUDE.md'), wissen: WISSEN, gitDir: git.GIT_DIR, config: git.WORK,
+    private: [OPTIONS_FILE, STATE_FILE, runner.baselineFile],
+  };
+}
+function prepareRights(user = perms.lookupUser(), { paths = rightsPaths(), fsx } = {}) {
+  runner.runAs = user;
+  if (!user) {
+    console.log(`[hausmeister] user ${perms.RUN_USER} not found, drafts run as ${process.getuid ? process.getuid() : '?'}`);
+    runner.beforeUnprivileged = null;
+    return [];
+  }
+  const lines = perms.prepare(user, paths, { fsx });
+  for (const l of lines) console.log(`[hausmeister] ${l}`);
+  // A login in the terminal (root) or a root implementation leaves files of root in /data/home.
+  runner.beforeUnprivileged = () => perms.chownTree(paths.home, user.uid, user.gid, fsx);
+  console.log(`[hausmeister] drafts and inspections run as ${user.name} (uid ${user.uid}), implementations as root`);
+  return lines;
+}
+
+// ---- terminal (ttyd, root, only through the board) --------------------------------
+// No Supervisor token in the terminal; ha-api, ha-read and cfg-git go through the local proxy with
+// a write token of its own. No start files from /data/home (the draft user can write there).
+function terminalEnv(base, proxyUrl, token) {
+  return childEnv(base, { HM_PROXY_URL: proxyUrl, HM_PROXY_TOKEN: token, HM_LANG: i18n.language(), INPUTRC: '/etc/inputrc', HISTFILE: '/data/.terminal_history' });
+}
+function terminalArgs() {
+  return ['-p', String(TTYD_PORT), '-i', '127.0.0.1', '-b', '/terminal', '-W', '-w', WORK_DIR, '-d', '3', '-t', 'fontSize=14', '-t', 'titleFixed=Hausmeister',
+    'bash', '--noprofile', '--rcfile', TERMINAL_RC, '-i'];
+}
+async function startTerminal({ spawnFn = spawn, restartMs = 3000 } = {}) {
+  const url = await proxy.ensure();
+  const token = proxy.issue('write', 'terminal');
+  const env = terminalEnv(process.env, url, token);
+  const once = () => {
+    const c = spawnFn('ttyd', terminalArgs(), { env, stdio: 'inherit' });
+    c.on('error', (e) => console.error('[hausmeister] terminal:', e.message));
+    c.on('exit', () => setTimeout(once, restartMs).unref());
+    return c;
+  };
+  return { child: once(), env, token };
+}
 const fired = new Set();
 
 // ---- sensors -------------------------------------------------------------
@@ -440,6 +491,8 @@ server.on('upgrade', onUpgrade);
 async function main() {
   await git.init();
   await proxy.ensure();
+  try { prepareRights(); } catch (e) { console.error('[hausmeister] rights:', e.message); }
+  await startTerminal();
   try { const self = await ha.sup('GET', '/addons/self/info'); opts.panel_url = `/${self.slug}`; } catch { /* outside the Supervisor */ }
   server.listen(PORT, () => console.log(`[hausmeister] board on port ${PORT}, runs at ${opts.run_times.join(', ')}`));
   await ha.waitForCore();
@@ -461,4 +514,7 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { route, onUpgrade, store, runner, proxy, opts, onEvent, deps, resetAuthCache, intake, maybeInspection, applyLanguage, writeRuntimeFiles, exportWissen };
+module.exports = {
+  route, onUpgrade, store, runner, proxy, opts, onEvent, deps, resetAuthCache, intake, maybeInspection, applyLanguage, writeRuntimeFiles, exportWissen,
+  prepareRights, rightsPaths, terminalEnv, terminalArgs, startTerminal,
+};

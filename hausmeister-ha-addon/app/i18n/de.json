@@ -382,5 +382,6 @@
  "rate.text": "Innerhalb einer Stunde kamen mehr als {max} neue Tickets aus der To-do-Liste oder aus Ereignissen. Weitere werden verworfen, bis die Stunde um ist. Bitte prüf deine Automationen.",
  "cli.cfg_git_only": "cfg-git: nur {list}",
  "cli.cfg_git_refused": "cfg-git: Argument nicht erlaubt: {arg}",
+ "cli.cfg_git_proxy_failed": "cfg-git: Der Hausmeister-Server hat nicht geantwortet (HTTP {status})",
  "cli.path_not_allowed": "Pfad nicht erlaubt: {path}"
 }

@@ -23,6 +23,9 @@ const WEB = ['home-assistant.io', 'www.home-assistant.io', 'github.com', 'raw.gi
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash(ha-read:*)', 'Bash(cfg-git:*)', 'Bash(jq:*)', 'Bash(grep:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(ls:*)',
   'Bash(echo:*)', 'Bash(printf:*)', 'Bash(cut:*)', 'Bash(tr:*)', 'Bash(date:*)'];
 const WRITE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', ...WEB, 'Bash', `Edit(/${WISSEN})`];
+// Settings, hooks and MCP servers only from the command line and /data/work (root), never from
+// /data/home, which the draft user can write: a root implementation must not run its hooks.
+const SETTINGS_ARGS = ['--setting-sources', 'project', '--strict-mcp-config'];
 // Closed in every phase: secrets, the login of Claude, the snapshots, the add-on itself, /proc
 // (environment of other processes) and network tools in the shell.
 function denyRules(work = git.WORK) {
@@ -127,9 +130,20 @@ function folderSizeGb(dir) {
   });
 }
 
-function runClaude(args, timeoutMs, onSpawn, onLine, env = {}) {
+// Spawn options of a Claude call. Draft and inspection (write = false) run as the unprivileged
+// user (uid/gid, HOME of the login); the implementation after approval stays root and keeps write
+// access to /homeassistant.
+function spawnOptions({ write, user, env }) {
+  const o = { cwd: WORK_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] };
+  if (write || !user) return o;
+  return { ...o, uid: user.uid, gid: user.gid, env: { ...env, HOME, USER: user.name, LOGNAME: user.name } };
+}
+
+function runClaude(args, timeoutMs, onSpawn, onLine, env = {}, { write = true, user = null, spawnFn = spawn } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: childEnv(process.env, { CI: '1', HM_LANG: i18n.language(), HM_WISSEN: WISSEN, ...env }), stdio: ['ignore', 'pipe', 'pipe'] });
+    const opts = spawnOptions({ write, user, env: childEnv(process.env, { CI: '1', HM_LANG: i18n.language(), HM_WISSEN: WISSEN, ...env }) });
+    let child;
+    try { child = spawnFn(CLAUDE, args, opts); } catch (e) { resolve({ code: -1, stdout: '', stderr: e.message }); return; }
     if (onSpawn) onSpawn(child);
     let stdout = '';
     let stderr = '';
@@ -159,6 +173,11 @@ class Runner {
     this.pending = new Set();
     this.pendingQuota = false;
     this.proxy = null;
+    // Unprivileged user for draft and inspection ({ name, uid, gid }), null: everything as root.
+    this.runAs = null;
+    // Called before every unprivileged call (gives /data/home back after a root login or run).
+    this.beforeUnprivileged = null;
+    this.spawn = spawn;
     this.baselineFile = process.env.HM_BASELINE || '/data/baseline.json';
   }
 
@@ -193,7 +212,7 @@ class Runner {
     const now = await watchSnapshot();
     let prev = null;
     try { prev = JSON.parse(fs.readFileSync(this.baselineFile, 'utf8')); } catch { /* first run */ }
-    fs.writeFileSync(this.baselineFile, JSON.stringify(now));
+    fs.writeFileSync(this.baselineFile, JSON.stringify(now), { mode: 0o600 });
     if (!prev) return [];
     const w = L.compareWatch(prev, now);
     const reasons = [];
@@ -281,7 +300,7 @@ class Runner {
     let before = null;
     try {
       const args = ['-p', promptFor(t, phase, s), '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(L.RESULT_SCHEMA),
-        '--add-dir', git.WORK];
+        '--add-dir', git.WORK, ...SETTINGS_ARGS];
       if (this.opts.model) args.push('--model', this.opts.model);
       if (t.session_id) args.push('--resume', t.session_id);
       if (phase === 'entwerfen') {
@@ -334,9 +353,13 @@ class Runner {
           }
         }
       };
+      const write = mode === 'write';
+      if (!write && this.runAs && this.beforeUnprivileged) {
+        try { this.beforeUnprivileged(); } catch (e) { console.error('[hausmeister] rights of the login:', e.message); }
+      }
       let proc;
       try {
-        proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine, proxyEnv);
+        proc = await runClaude(args, this.opts.run_timeout_minutes * 60000, (c) => { this.child = c; }, onLine, proxyEnv, { write, user: this.runAs, spawnFn: this.spawn });
       } finally { if (proxyToken) this.proxy.revoke(proxyToken); }
       this.child = null;
       result.steps = cur.steps.slice(-80).map((x) => x.text);
@@ -464,4 +487,4 @@ class Runner {
   }
 }
 
-module.exports = { Runner, promptFor, READ_TOOLS, WRITE_TOOLS, denyRules, childEnv, configFiles, interpret: L.interpretResult };
+module.exports = { Runner, promptFor, READ_TOOLS, WRITE_TOOLS, SETTINGS_ARGS, denyRules, childEnv, spawnOptions, configFiles, interpret: L.interpretResult };

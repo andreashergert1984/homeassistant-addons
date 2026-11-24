@@ -382,5 +382,6 @@
  "rate.text": "More than {max} new tickets arrived within one hour from the todo list or from events. Further ones are discarded until the hour is over. Please check your automations.",
  "cli.cfg_git_only": "cfg-git: only {list}",
  "cli.cfg_git_refused": "cfg-git: argument not allowed: {arg}",
+ "cli.cfg_git_proxy_failed": "cfg-git: the Hausmeister server did not answer (HTTP {status})",
  "cli.path_not_allowed": "Path not allowed: {path}"
 }

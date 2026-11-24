@@ -1,6 +1,8 @@
 #!/bin/sh
 # Entrypoint of the Hausmeister add-on.
 set -eu
+# Files of root stay unwritable for the user hausmeister (draft, inspection).
+umask 022
 
 mkdir -p /data/home /data/work /share/hausmeister/tickets
 
@@ -12,8 +14,8 @@ export TZ="${TZ_HA:-Europe/Berlin}"
 # (/data/wissen.md, exported to /share/hausmeister/WISSEN.md) are
 # written by the server in the active language (option "language", auto follows Home Assistant).
 
-# Login terminal, only reachable through the board (ingress).
-( while true; do ttyd -p 7681 -i 127.0.0.1 -b /terminal -W -w /data/work -d 3 -t fontSize=14 -t titleFixed=Hausmeister bash -l || true; sleep 3; done ) &
+# The login terminal (ttyd, only reachable through the board) is started by the server, without
+# the Supervisor token. Rights for the user hausmeister (draft, inspection) are set by the server.
 
 echo "[hausmeister] time zone ${TZ}"
 exec node /app/server.js

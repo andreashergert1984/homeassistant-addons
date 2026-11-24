@@ -41,9 +41,13 @@ function writeExcludes() {
   return big;
 }
 
+// No system or global git configuration: /data/home belongs to the draft user, and a
+// .gitconfig there must not change what git does as root.
+const GIT_ENV = () => ({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' });
+
 function git(args, { allowFail = false } = {}) {
   return new Promise((resolve, reject) => {
-    execFile('git', [`--git-dir=${GIT_DIR}`, `--work-tree=${WORK}`, ...args], { maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err, stdout, stderr) => {
+    execFile('git', [`--git-dir=${GIT_DIR}`, `--work-tree=${WORK}`, ...args], { maxBuffer: 64 * 1024 * 1024, env: GIT_ENV() }, (err, stdout, stderr) => {
       if (err && !allowFail) reject(new Error(`git ${args[0]}: ${stderr || err.message}`));
       else resolve(stdout.trim());
     });
@@ -53,7 +57,7 @@ function git(args, { allowFail = false } = {}) {
 async function init() {
   if (!fs.existsSync(path.join(GIT_DIR, 'HEAD'))) {
     fs.mkdirSync(GIT_DIR, { recursive: true });
-    await new Promise((res, rej) => execFile('git', ['init', '--bare', '-q', GIT_DIR], (e) => (e ? rej(e) : res())));
+    await new Promise((res, rej) => execFile('git', ['init', '--bare', '-q', GIT_DIR], { env: GIT_ENV() }, (e) => (e ? rej(e) : res())));
     await git(['config', 'core.bare', 'false']);
     await git(['config', 'user.name', 'Hausmeister']);
     await git(['config', 'user.email', 'hausmeister@localhost']);

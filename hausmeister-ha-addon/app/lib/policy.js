@@ -81,31 +81,58 @@ const CFG_GIT_SHORT_VALUE = new Set(['n', 'S', 'G', 'L', 'M', 'C', 'B', 'l', 'U'
 const SECRET_PATHS = /(^|[/:])(secrets\.yaml|\.storage\/auth[^/]*|\.storage\/core\.config_entries)$/;
 const WITH_NO_EXT = ['log', 'diff', 'show', 'blame'];
 
+// Pathspecs that keep secrets out of every diff, patch, listing and log, also when no path is given.
+const CFG_GIT_EXCLUDES = [':(top,exclude,glob)**/secrets.yaml', ':(top,exclude,glob).storage/auth*', ':(top,exclude).storage/core.config_entries'];
+const WITH_EXCLUDES = ['log', 'diff', 'show', 'ls-files'];
+// Options that take the next argument as their value ("-n 5", "--author x"); needed to tell
+// revisions and paths apart before "--".
+const CFG_GIT_LONG_VALUE = ['author', 'committer', 'grep', 'since', 'until', 'after', 'before', 'max-count', 'skip', 'min-parents', 'max-parents',
+  'diff-filter', 'format', 'date', 'encoding', 'exclude', 'decorate-refs', 'decorate-refs-exclude', 'ignore-matching-lines', 'rotate-to', 'skip-to'];
+const CFG_GIT_SHORT_NEXT = new Set(['n', 'S', 'G', 'L', 'I']);
+
 // Returns { ok: true, args } with the arguments for git after the subcommand, or { ok: false, reason }.
-function cfgGitArgs(argv) {
+// isRev(arg) tells whether a positional argument before "--" is a revision (the caller asks git);
+// everything else is a path and moves behind "--", followed by CFG_GIT_EXCLUDES.
+function cfgGitArgs(argv, isRev = () => true) {
   const [sub, ...rest] = argv;
   if (!CFG_GIT_SUBS.includes(sub)) return { ok: false, reason: 'sub' };
   let paths = false;
+  let value = false;
+  const head = [];
+  const pathArgs = [];
   for (const a of rest) {
     const s = String(a);
     if (SECRET_PATHS.test(s)) return { ok: false, reason: 'secret', arg: s };
-    if (paths || s === '-' || !s.startsWith('-')) continue;
+    if (paths) { pathArgs.push(s); continue; }
+    // A value that looks like an option is checked like one (refusing too much rather than too little).
+    if (value) { value = false; if (!s.startsWith('-')) { head.push(s); continue; } }
     if (s === '--') { paths = true; continue; }
+    if (s === '-' || !s.startsWith('-')) {
+      if (sub === 'ls-files' || (WITH_EXCLUDES.includes(sub) && !isRev(s))) pathArgs.push(s); else head.push(s);
+      continue;
+    }
+    head.push(s);
     if (s.startsWith('--')) {
       const name = s.slice(2).split('=')[0].toLowerCase();
       if (!name) return { ok: false, reason: 'option', arg: s };
       // Negations (--no-ext-diff) only turn things off, except --no-index (files outside the snapshots).
       const deny = name.startsWith('no-') ? ['no-index'] : CFG_GIT_DENY_LONG;
       if (deny.some((d) => d.startsWith(name) || name.startsWith(d))) return { ok: false, reason: 'option', arg: s };
+      if (!s.includes('=') && CFG_GIT_LONG_VALUE.includes(name)) value = true;
       continue;
     }
-    for (const ch of s.slice(1)) {
+    const cluster = s.slice(1);
+    for (const [i, ch] of [...cluster].entries()) {
       if (CFG_GIT_DENY_SHORT.has(ch)) return { ok: false, reason: 'option', arg: s };
-      if (CFG_GIT_SHORT_VALUE.has(ch)) break;
+      if (CFG_GIT_SHORT_NEXT.has(ch) && i === cluster.length - 1) value = true;
+      if (CFG_GIT_SHORT_VALUE.has(ch) || CFG_GIT_SHORT_NEXT.has(ch)) break;
     }
   }
   const safety = WITH_NO_EXT.includes(sub) ? (sub === 'blame' ? ['--no-textconv'] : ['--no-ext-diff', '--no-textconv']) : [];
-  return { ok: true, args: [sub, ...safety, ...rest] };
+  if (!WITH_EXCLUDES.includes(sub)) return { ok: true, args: [sub, ...safety, ...head, ...(paths ? ['--'] : []), ...pathArgs] };
+  // --follow needs exactly one pathspec; that path was checked above.
+  const follow = head.includes('--follow') && pathArgs.length === 1;
+  return { ok: true, args: [sub, ...safety, ...head, '--', ...pathArgs, ...(follow ? [] : CFG_GIT_EXCLUDES)] };
 }
 
 // Environment for git: no system or global configuration, no pager, no inherited repository.
@@ -128,5 +155,5 @@ function rateTake(times, now, max = 10, windowMs = 3600000) {
 
 module.exports = {
   INGRESS_IP, ingressAllowed, READ_WS, readWsAllowed, OUR_EVENTS, serviceDenied, wsWriteDenied, corePath, restAllowed,
-  CFG_GIT_SUBS, cfgGitArgs, cfgGitEnv, SECRET_PATHS, isActiveAdmin, rateTake,
+  CFG_GIT_SUBS, CFG_GIT_EXCLUDES, cfgGitArgs, cfgGitEnv, SECRET_PATHS, isActiveAdmin, rateTake,
 };

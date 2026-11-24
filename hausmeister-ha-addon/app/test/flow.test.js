@@ -466,10 +466,10 @@ test('Sprache: auto folgt Home Assistant, Board bekommt das Wörterbuch, Claude 
     assert.match(fs.readFileSync(path.join(tmp, 'share', 'tickets', doc), 'utf8'), /^State: New/m, 'Ticketdoku in der Sprache');
     await post(`/api/tickets/${id}/action`, { action: 'verwerfen' });
 
-    const dirs = { work: path.join(tmp, 'rt-work'), home: path.join(tmp, 'rt-home'), share: path.join(tmp, 'rt-share'), wissen: path.join(tmp, 'rt-data', 'wissen.md') };
+    const dirs = { work: path.join(tmp, 'rt-work'), rc: path.join(tmp, 'rt-data', 'terminal.rc'), share: path.join(tmp, 'rt-share'), wissen: path.join(tmp, 'rt-data', 'wissen.md') };
     mod.writeRuntimeFiles(dirs);
     assert.match(fs.readFileSync(path.join(dirs.work, 'CLAUDE.md'), 'utf8'), /^# Hausmeister: rules/);
-    assert.match(fs.readFileSync(path.join(dirs.home, '.bash_profile'), 'utf8'), /Hausmeister terminal/);
+    assert.match(fs.readFileSync(dirs.rc, 'utf8'), /Hausmeister terminal/, 'Begrüßung außerhalb von /data/home');
     assert.match(fs.readFileSync(dirs.wissen, 'utf8'), /^# Knowledge about this house/);
     assert.match(fs.readFileSync(path.join(dirs.share, 'WISSEN.md'), 'utf8'), /^# Knowledge about this house/, 'Export nach /share');
     mod.opts.language = 'de';
@@ -491,4 +491,73 @@ test('Sprache: auto folgt Home Assistant, Board bekommt das Wörterbuch, Claude 
     mod.opts.language = 'de';
     i18n.setLanguage('de');
   }
+});
+
+test('0.8.1: Entwurf und Rundgang als hausmeister (uid), Umsetzung als root; Terminal ohne Token', async () => {
+  const { spawn } = require('child_process');
+  const seen = [];
+  let given = 0;
+  const r = mod.runner;
+  const saved = { runAs: r.runAs, spawn: r.spawn, before: r.beforeUnprivileged };
+  r.runAs = { name: 'hausmeister', uid: 4242, gid: 4243 };
+  r.beforeUnprivileged = () => { given++; };
+  // Without root no setuid: record the options and start the fake claude without uid/gid.
+  r.spawn = (cmd, args, o) => {
+    seen.push({ draft: args[args.indexOf('--permission-mode') + 1] === 'default', args, o });
+    const { uid, gid, ...rest } = o;
+    return spawn(cmd, args, rest);
+  };
+  try {
+    const id = (await post('/api/tickets', { title: 'Als anderer Benutzer', mode: 'entwurf' })).body.id;
+    await r.cycle('Test', undefined, [id]);
+    assert.strictEqual((await get(`/api/tickets/${id}`)).state, 'entwurf');
+    await post(`/api/tickets/${id}/action`, { action: 'umsetzen' });
+    await r.cycle('Test', undefined, [id]);
+    assert.strictEqual((await get(`/api/tickets/${id}`)).state, 'umgesetzt');
+    const insp = mod.store.create({ title: 'Rundgang', text: 'x', by: 'Andreas', source: 'rundgang', state: 'entwerfen', kind: 'rundgang' });
+    await r.cycle('Test', undefined, [insp.id]);
+    assert.strictEqual(seen.length, 3);
+    const [draft, impl, round] = seen;
+    for (const s of [draft, round]) {
+      assert.deepStrictEqual([s.o.uid, s.o.gid, s.o.env.HOME, s.o.env.USER], [4242, 4243, '/data/home', 'hausmeister'], 'unprivilegiert');
+      assert.strictEqual(s.o.env.SUPERVISOR_TOKEN, undefined);
+    }
+    assert.ok(!('uid' in impl.o) && !('gid' in impl.o), 'Umsetzung als root');
+    assert.ok(!impl.draft && draft.draft);
+    assert.strictEqual(given, 2, 'Login vor jedem unprivilegierten Lauf zurückgegeben');
+    for (const s of seen) {
+      const i = s.args.indexOf('--setting-sources');
+      assert.ok(i > 0 && s.args[i + 1] === 'project' && s.args.includes('--strict-mcp-config'), 'keine Hooks und MCP aus /data/home');
+    }
+    assert.strictEqual(fs.statSync(process.env.HM_STATE).mode & 0o777, 0o600, 'Store nur root');
+  } finally { Object.assign(r, { runAs: saved.runAs, spawn: saved.spawn, beforeUnprivileged: saved.before }); }
+
+  // Terminal: started by the server, without Supervisor token, with its own write token for the proxy.
+  const started = [];
+  const term = await mod.startTerminal({ spawnFn: (cmd, args, o) => { started.push({ cmd, args, o }); return { on: () => {} }; } });
+  try {
+    assert.strictEqual(started[0].cmd, 'ttyd');
+    const env = started[0].o.env;
+    assert.strictEqual(env.SUPERVISOR_TOKEN, undefined);
+    assert.strictEqual(env.HASSIO_TOKEN, undefined);
+    assert.strictEqual(env.HM_PROXY_URL, mod.proxy.url);
+    assert.deepStrictEqual(mod.proxy.tokens.get(env.HM_PROXY_TOKEN), { ...mod.proxy.tokens.get(term.token), mode: 'write', who: 'terminal' });
+    assert.ok(started[0].args.includes('--noprofile') && started[0].args.includes('--rcfile'), 'keine Startdateien aus /data/home');
+    assert.ok(!started[0].args.includes('-l'));
+    assert.strictEqual(env.INPUTRC, '/etc/inputrc');
+    assert.deepStrictEqual(mod.terminalEnv({ SUPERVISOR_TOKEN: 's', HASSIO_TOKEN: 'h', PATH: '/bin' }, 'http://p', 't').SUPERVISOR_TOKEN, undefined);
+  } finally { mod.proxy.revoke(term.token); }
+});
+
+test('0.8.1: Rechte beim Start nur mit Benutzer; ohne Benutzer alles wie bisher', () => {
+  const before = mod.runner.runAs;
+  try {
+    assert.deepStrictEqual(mod.prepareRights(null), []);
+    assert.strictEqual(mod.runner.runAs, null);
+    assert.strictEqual(mod.runner.beforeUnprivileged, null);
+    const p = mod.rightsPaths();
+    assert.ok(p.private.includes(process.env.HM_OPTIONS) && p.private.includes(process.env.HM_STATE), 'Optionen und Store 0600');
+    assert.strictEqual(p.gitDir, process.env.HM_GIT_DIR);
+    assert.strictEqual(p.config, cfg);
+  } finally { mod.runner.runAs = before; }
 });

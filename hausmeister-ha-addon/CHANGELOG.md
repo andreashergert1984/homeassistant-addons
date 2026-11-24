@@ -1,3 +1,15 @@
+## 0.8.1
+
+Drafts and inspections run as their own user.
+
+- Drafts and inspections run as the unprivileged user `hausmeister` (uid 1001) instead of root. They can read the configuration, but cannot write it, cannot read `secrets.yaml`, the add-on options, the ticket store or the snapshot repository, and cannot read the environment of other processes. Implementations after approval still run as root and write the configuration as before.
+- On start the add-on sets `secrets.yaml` to 0600 (owner stays root, Home Assistant still reads it) and notes this once in the log. Nothing else in the configuration folder changes; the login files in `.storage` are only checked, and a warning is logged if one is readable for others.
+- `/data/home` (the login of Claude) belongs to `hausmeister`, so the login and its token refresh work in every phase. It is handed over again before each draft, also after a login in the terminal.
+- `cfg-git` runs through the local proxy of the add-on: the server runs git as root with the same argument checks, the draft user needs no access to the snapshots. `secrets.yaml` (in every folder), `.storage/auth*` and `.storage/core.config_entries` are excluded by pathspec from `log`, `diff`, `show` and `ls-files`, also without a path.
+- The terminal is started by the add-on without the Supervisor token; `ha-api`, `ha-read` and `cfg-git` there use the local proxy with a write token of the terminal. The shell no longer reads start files from `/data/home`.
+- Claude is started with `--setting-sources project --strict-mcp-config`: settings, hooks and MCP servers from `/data/home` are ignored, so a draft cannot plant anything that runs in an implementation as root. git of the add-on ignores the global git configuration.
+- The ticket store is written with mode 0600; the add-on starts with `umask 022`.
+
 ## 0.8.0
 
 Security hardening.

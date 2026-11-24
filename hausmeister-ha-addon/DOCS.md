@@ -55,6 +55,11 @@ Runs start at the configured times. Without queued tickets Claude is not started
 
 - **Drafts** run with read-only tools: files can be read, Home Assistant can only be queried
   through `ha-read` (a fixed list of read-only WebSocket commands and GET requests).
+- **Drafts and inspections run as the user `hausmeister`**, not as root: they cannot write the
+  configuration and cannot read `secrets.yaml` (set to 0600 on start, the only change in the
+  configuration folder), the add-on options, the ticket store or the snapshots. Implementations
+  after approval run as root. `cfg-git` goes through the add-on, which leaves out `secrets.yaml`
+  and the login files in every diff and log. The terminal has no Supervisor token.
 - **Claude never gets the Supervisor token.** `ha-read` and `ha-api` talk to a local proxy in the
   add-on with a one-time token per call. In a draft or inspection that token only reads; in an
   implementation it may write, but never reaches the Supervisor API, the services `hassio.*`,
@@ -238,6 +243,12 @@ Läufe starten zu den eingestellten Zeiten. Steht nichts an, wird Claude gar nic
 
 - **Entwürfe** laufen mit lesenden Werkzeugen: Dateien lesen, Home Assistant nur über `ha-read`
   abfragen (eine feste Liste lesender WebSocket-Befehle und GET-Anfragen).
+- **Entwürfe und Rundgänge laufen als Benutzer `hausmeister`**, nicht als root: Sie können die
+  Konfiguration nicht schreiben und `secrets.yaml` (beim Start auf 0600 gesetzt, die einzige
+  Änderung im Konfigurationsordner), die Add-on-Optionen, die Ticketdaten und die Sicherungen nicht
+  lesen. Umsetzungen nach Freigabe laufen als root. `cfg-git` läuft über das Add-on, das
+  `secrets.yaml` und die Anmeldedateien in jedem Diff und Log auslässt. Das Terminal hat kein
+  Supervisor-Token.
 - **Claude bekommt nie das Supervisor-Token.** `ha-read` und `ha-api` sprechen mit einem lokalen
   Proxy im Add-on, mit einem Einmal-Token je Aufruf. Im Entwurf und beim Rundgang darf es nur lesen;
   in der Umsetzung auch schreiben, aber nie die Supervisor-API, die Dienste `hassio.*`,

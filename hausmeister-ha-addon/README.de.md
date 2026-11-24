@@ -156,7 +156,10 @@ kommen nicht wieder.
   Anmeldedateien, das Add-on selbst und `curl`/`wget` sind gesperrt; Webseiten nur aus der HA-Doku und von GitHub.
 - Von außerhalb des Boards (To-do-Liste, Ereignisse, Knöpfe in Meldungen) zählen nur aktive Admins, höchstens
   10 neue Tickets je Stunde, und Sofort-Umsetzung braucht `allow_immediate_from_outside`.
-- In der Umsetzung hat Claude weiterhin eine Shell als Add-on-Benutzer, das ist also keine Sandbox.
+- Entwürfe und Rundgänge laufen als eigener Benutzer `hausmeister` ohne Rechte: kein Schreibzugriff auf die
+  Konfiguration, kein Zugriff auf `secrets.yaml` (beim Start auf 0600 gesetzt), die Add-on-Optionen oder die
+  Sicherungen. Das Terminal hat kein Supervisor-Token.
+- In der Umsetzung hat Claude weiterhin eine Shell als root im Add-on, das ist also keine Sandbox.
 - Sicherungen: eigener Git-Verlauf der Konfiguration (ohne Datenbanken, Logs, Anmeldedaten, Modellordner und
   Dateien über 20 MB) und, wenn eingeschaltet, eine HA-Teilsicherung vor jeder Umsetzung.
 

@@ -157,7 +157,10 @@ do not come back.
   the add-on itself and `curl`/`wget` are closed; web pages only from the Home Assistant docs and GitHub.
 - From outside the board (todo list, events, notification buttons) only active admins count, at most 10 new
   tickets per hour, and immediate implementation needs `allow_immediate_from_outside`.
-- In an implementation Claude still has a shell as the add-on user, so this is no sandbox.
+- Drafts and inspections run as the unprivileged user `hausmeister`: no write access to the configuration, no
+  access to `secrets.yaml` (set to 0600 on start), the add-on options or the snapshots. The terminal has no
+  Supervisor token.
+- In an implementation Claude still has a shell as root in the add-on, so this is no sandbox.
 - Backups: a git history of the configuration of its own (without databases, logs, login data, model folders
   and files over 20 MB) and, if turned on, a partial HA backup before every implementation.
 

@@ -35,7 +35,7 @@ test('cfg-git: Unterbefehle und Argumente streng geprüft', () => {
   const good = [['log', '--oneline', '-5'], ['log', '-n5', '--stat'], ['diff', 'HEAD~1', '--', 'configuration.yaml'], ['show', '--stat', 'HEAD'], ['log', '-Sfoo'],
     ['status', '--porcelain'], ['ls-files'], ['blame', 'automations.yaml'], ['diff', '--no-ext-diff', '--name-only'], ['log', '--format=%H %s', '--date=iso']];
   for (const a of good) assert.strictEqual(policy.cfgGitArgs(a).ok, true, a.join(' '));
-  assert.deepStrictEqual(policy.cfgGitArgs(['log', '-1']).args, ['log', '--no-ext-diff', '--no-textconv', '-1']);
+  assert.deepStrictEqual(policy.cfgGitArgs(['log', '-1']).args, ['log', '--no-ext-diff', '--no-textconv', '-1', '--', ...policy.CFG_GIT_EXCLUDES]);
   assert.deepStrictEqual(policy.cfgGitArgs(['blame', 'a']).args, ['blame', '--no-textconv', 'a']);
   assert.deepStrictEqual(policy.cfgGitArgs(['status']).args, ['status']);
   const env = policy.cfgGitEnv({ PATH: '/bin', GIT_DIR: '/x', GIT_EXTERNAL_DIFF: 'sh', SUPERVISOR_TOKEN: 't' });
@@ -227,9 +227,9 @@ test('Benachrichtigungen mit Nonce, Admins, Grenze je Stunde, flüchtige Dateien
   assert.ok(L.isVolatile('zigbee2mqtt/coordinator.json', ['zigbee2mqtt/coordinator.json']));
 });
 
-test('Add-on-Konfiguration 0.8.0: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
+test('Add-on-Konfiguration 0.8.1: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
   const cfg = fs.readFileSync(path.join(ROOT, 'config.yaml'), 'utf8');
-  assert.match(cfg, /^version: "0\.8\.0"$/m);
+  assert.match(cfg, /^version: "0\.8\.1"$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: false$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: bool$/m);
   for (const x of ['home/.claude/.credentials.json', 'home/.claude/projects', 'home/.claude/projects/*', 'configgit', 'configgit/*']) assert.ok(cfg.includes(`  - "${x}"\n`), x);
