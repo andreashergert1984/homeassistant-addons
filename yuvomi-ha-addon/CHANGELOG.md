@@ -1,3 +1,7 @@
+## 2.83.0.9
+
+- Unterer Rand auf Geräten ohne Kamera vergrößert, der Fully-Hinweis streifte noch die Knöpfe der Eingabeblätter.
+
 ## 2.83.0.8
 
 - Geräte ohne Kamera (Wandgerät mit Handscanner): oben und unten mehr Rand, damit der Hinweis von Fully Kiosk ohne Lizenz die Modusknöpfe und die Knöpfe der Eingabeblätter nicht verdeckt.
