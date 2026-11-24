@@ -78,11 +78,14 @@ const CFG_GIT_DENY_SHORT = new Set(['o', 'O', 'c']);
 // Short options whose value follows directly ("-n5", "-Sfoo"): the rest of the cluster is a value.
 const CFG_GIT_SHORT_VALUE = new Set(['n', 'S', 'G', 'L', 'M', 'C', 'B', 'l', 'U', 'X']);
 // Files that stay closed for Claude, also through the snapshots.
-const SECRET_PATHS = /(^|[/:])(secrets\.yaml|\.storage\/auth[^/]*|\.storage\/core\.config_entries)$/;
+// Credential stores of integrations (.storage/application_credentials and other *credential* files)
+// count as secrets too (0.8.3).
+const SECRET_PATHS = /(^|[/:])(secrets\.yaml|\.storage\/auth[^/]*|\.storage\/core\.config_entries|\.storage\/[^/]*credential[^/]*)$/;
 const WITH_NO_EXT = ['log', 'diff', 'show', 'blame'];
 
 // Pathspecs that keep secrets out of every diff, patch, listing and log, also when no path is given.
-const CFG_GIT_EXCLUDES = [':(top,exclude,glob)**/secrets.yaml', ':(top,exclude,glob).storage/auth*', ':(top,exclude).storage/core.config_entries'];
+const CFG_GIT_EXCLUDES = [':(top,exclude,glob)**/secrets.yaml', ':(top,exclude,glob).storage/auth*', ':(top,exclude).storage/core.config_entries',
+  ':(top,exclude,glob).storage/*credential*'];
 const WITH_EXCLUDES = ['log', 'diff', 'show', 'ls-files'];
 // Options that take the next argument as their value ("-n 5", "--author x"); needed to tell
 // revisions and paths apart before "--".

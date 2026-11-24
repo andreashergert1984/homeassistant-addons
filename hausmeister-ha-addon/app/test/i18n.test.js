@@ -210,7 +210,8 @@ test('Englische Texte in Logik, Prompts und Benachrichtigungen', () => {
 test('Regeln für Claude gibt es in jeder Sprache, mit denselben Statuswerten', () => {
   for (const lang of i18n.LANGS) {
     const r = fs.readFileSync(path.join(APP, 'prompt', `regeln.${lang}.md`), 'utf8');
-    for (const s of ['entwurf', 'rueckfrage', 'fehler', 'umgesetzt', 'zusammenfassung', 'geaenderte_dateien', 'ha_aenderungen', 'WISSEN.md']) assert.ok(r.includes(s), `${lang}: ${s}`);
+    for (const s of ['entwurf', 'rueckfrage', 'fehler', 'umgesetzt', 'zusammenfassung', 'geaenderte_dateien', 'ha_aenderungen', '/data/wissen.md']) assert.ok(r.includes(s), `${lang}: ${s}`);
+    assert.ok(!r.includes('WISSEN.md'), `${lang}: Wissensdatei heißt /data/wissen.md`);
     assert.ok(!r.replace(/„\u2014“|"\u2014"/g, '').includes('\u2014'), `${lang}: kein Gedankenstrich im Text`);
   }
 });

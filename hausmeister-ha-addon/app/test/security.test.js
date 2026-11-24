@@ -43,6 +43,42 @@ test('cfg-git: Unterbefehle und Argumente streng geprüft', () => {
   assert.deepStrictEqual([env.GIT_CONFIG_NOSYSTEM, env.GIT_CONFIG_GLOBAL, env.PATH], ['1', '/dev/null', '/bin']);
 });
 
+test('cfg-git: Credential-Dateien in .storage abgelehnt und per Pathspec ausgeschlossen (0.8.3)', () => {
+  for (const a of [['show', 'HEAD:.storage/application_credentials'], ['diff', '--', '.storage/application_credentials'], ['log', '-p', '.storage/application_credentials'],
+    ['ls-files', '.storage/nest_credentials.json'], ['blame', '.storage/application_credentials'], ['show', 'HEAD~1:.storage/xyz_credential']]) {
+    const r = policy.cfgGitArgs(a);
+    assert.strictEqual(r.ok, false, a.join(' '));
+    assert.strictEqual(r.reason, 'secret', a.join(' '));
+  }
+  assert.ok(policy.CFG_GIT_EXCLUDES.includes(':(top,exclude,glob).storage/*credential*'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hm-cfggit-cred-'));
+  try {
+    const work = path.join(tmp, 'config');
+    const gitDir = path.join(tmp, 'git');
+    fs.mkdirSync(path.join(work, '.storage'), { recursive: true });
+    fs.writeFileSync(path.join(work, 'configuration.yaml'), 'homeassistant:\n');
+    fs.writeFileSync(path.join(work, '.storage', 'application_credentials'), '{"client_secret":"GEHEIM1"}');
+    fs.writeFileSync(path.join(work, '.storage', 'other_credentials.json'), '{"token":"GEHEIM2"}');
+    fs.writeFileSync(path.join(work, '.storage', 'lovelace'), '{}');
+    const g = (...a) => spawnSync('git', [`--git-dir=${gitDir}`, `--work-tree=${work}`, ...a], { env: cleanEnv(), encoding: 'utf8' });
+    spawnSync('git', ['init', '--bare', '-q', gitDir], { env: cleanEnv() });
+    g('add', '-A', '.');
+    g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'eins');
+    const run = (...a) => spawnSync(process.execPath, [path.join(APP, 'bin', 'cfg-git.js'), ...a], { cwd: tmp, env: { ...cleanEnv(), HM_GIT_DIR: gitDir, HM_CONFIG_DIR: work, HM_LANG: 'en' }, encoding: 'utf8' });
+    const ls = run('ls-files');
+    assert.strictEqual(ls.status, 0, ls.stderr);
+    assert.match(ls.stdout, /\.storage\/lovelace/);
+    assert.doesNotMatch(ls.stdout, /credential/);
+    const log = run('log', '-p');
+    assert.strictEqual(log.status, 0, log.stderr);
+    assert.match(log.stdout, /configuration\.yaml/);
+    assert.doesNotMatch(log.stdout, /GEHEIM/);
+    const refused = run('show', 'HEAD:.storage/application_credentials');
+    assert.strictEqual(refused.status, 2);
+    assert.doesNotMatch(refused.stdout, /GEHEIM/);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test('cfg-git als Programm: log --output=x wird abgelehnt und schreibt nichts', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hm-cfggit-'));
   try {
@@ -243,9 +279,9 @@ test('Benachrichtigungen mit Nonce, Admins, Grenze je Stunde, flüchtige Dateien
   assert.ok(L.isVolatile('zigbee2mqtt/coordinator.json', ['zigbee2mqtt/coordinator.json']));
 });
 
-test('Add-on-Konfiguration 0.8.2: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
+test('Add-on-Konfiguration 0.8.3: Option, Übersetzungen, Backup-Ausschlüsse, cfg-git im Image', () => {
   const cfg = fs.readFileSync(path.join(ROOT, 'config.yaml'), 'utf8');
-  assert.match(cfg, /^version: "0\.8\.2"$/m);
+  assert.match(cfg, /^version: "0\.8\.3"$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: false$/m);
   assert.match(cfg, /^ {2}allow_immediate_from_outside: bool$/m);
   for (const x of ['home/.claude/.credentials.json', 'home/.claude/projects', 'home/.claude/projects/*', 'configgit', 'configgit/*']) assert.ok(cfg.includes(`  - "${x}"\n`), x);

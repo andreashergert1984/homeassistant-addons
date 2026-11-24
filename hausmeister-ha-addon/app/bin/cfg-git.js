@@ -2,8 +2,8 @@
 'use strict';
 // Read-only view of the Hausmeister snapshots of /homeassistant ("cfg-git log", "cfg-git diff ...").
 // Every argument is checked (lib/policy.js): no options that write files, run programs or leave
-// the snapshot repository; no system or global git configuration; secrets.yaml and the auth files
-// are excluded by pathspec. Under Claude and in the terminal (HM_PROXY_URL) the server runs git
+// the snapshot repository; no system or global git configuration; secrets.yaml, the auth files,
+// core.config_entries and .storage/*credential* are excluded by pathspec. Under Claude and in the terminal (HM_PROXY_URL) the server runs git
 // through the local proxy, so the draft user needs no access to /data/configgit.
 
 const policy = require('../lib/policy');

@@ -4,7 +4,7 @@ configuration:
     description: Uhrzeiten (HH:MM), zu denen der Hausmeister die Schlange abarbeitet. Steht nichts an, wird Claude nicht gestartet.
   auto_draft:
     name: Neue Tickets gleich entwerfen
-    description: Neue Tickets aus der To-do-Liste bekommen beim nächsten Lauf einen Entwurf. Entwürfe ändern nichts.
+    description: "An: neue Tickets aus der To-do-Liste und Ereignisse ohne modus bekommen beim nächsten Lauf einen Entwurf. Aus: sie werden nur gesammelt (Zustand Neu). Entwürfe ändern nichts."
   max_tickets_per_run:
     name: Tickets pro Lauf
     description: Höchstens so viele Tickets je Lauf, damit das Kontingent reicht.
@@ -13,28 +13,28 @@ configuration:
     description: Danach wird der Claude-Aufruf abgebrochen und das Ticket als Fehler markiert.
   backup_before_change:
     name: HA-Sicherung vor jeder Umsetzung
-    description: Teilsicherung von Home Assistant ohne Datenbank vor jeder Umsetzung, zusätzlich zur eigenen Dateisicherung.
+    description: "Teilsicherung von Home Assistant ohne Datenbank vor jeder Umsetzung, zusätzlich zur Git-Sicherung der Konfiguration (die immer läuft). Entfällt, wenn der Konfigurationsordner größer als die Grenze für die HA-Sicherung ist."
   intake_todo:
     name: To-do-Liste für neue Tickets
-    description: Einträge dieser Liste werden zu Tickets und aus der Liste entfernt. Leer lassen, um das auszuschalten.
+    description: "Offene Einträge dieser Liste werden zu Tickets und aus der Liste entfernt. Leer lassen, um das auszuschalten. Präfixe für Sofort-Umsetzung: siehe letzte Option."
   notify_service:
     name: Benachrichtigungsdienst
-    description: "Optional, z. B. notify.mobile_app_handy. Meldet Entwürfe, Rückfragen, Umsetzungen und Wächter-Alarme."
+    description: "Optional, z. B. notify.mobile_app_handy. Meldet Entwürfe, Rückfragen, Umsetzungen, Fehler, Wächter-Alarme und neue Vorschläge; eine Handy-App bekommt Knöpfe."
   max_quota_percent:
     name: Kontingentgrenze (%)
-    description: Ab dieser Auslastung des Abos (höchstes Fenster laut Claude Code) fallen geplante Läufe aus, bis das Fenster erneuert ist. Sofort-Tickets laufen trotzdem. 0 schaltet die Grenze aus.
+    description: "Ab dieser Auslastung des Abos (höchstes Fenster laut Claude Code) fallen geplante Läufe aus, bis das Fenster erneuert ist, ebenso Sofort-Tickets aus der To-do-Liste, aus Ereignissen und von Knöpfen in Meldungen. Sofort-Tickets und Jetzt ausführen aus dem Board laufen trotzdem. 0 schaltet die Grenze aus."
   max_backup_gb:
     name: Grenze für die HA-Sicherung (GB)
     description: Ist der Konfigurationsordner größer (z. B. durch Modelle oder Medien), wird vor einer Umsetzung keine HA-Sicherung gemacht, nur die Git-Sicherung der Konfiguration. Eine HA-Teilsicherung enthält immer den ganzen Ordner.
   inspection_day:
     name: Rundgang
-    description: An diesem Tag schaut sich Claude beim ersten Lauf nur lesend um und füllt den Reiter Vorschläge. off (aus), daily (täglich) oder ein Wochentag mon bis sun; die deutschen Werte aus, taeglich und mo bis so gelten weiter.
+    description: "An diesem Tag schaut sich Claude beim Lauf zur ersten eingestellten Laufzeit nur lesend um und füllt den Reiter Vorschläge. off (aus), daily (täglich) oder ein Wochentag mon bis sun; die deutschen Werte aus, taeglich und mo bis so gelten weiter."
   model:
     name: Modell
     description: Optional, z. B. sonnet oder opus. Leer bedeutet die Vorgabe von Claude Code.
   language:
     name: Sprache
-    description: Sprache von Board, Meldungen und Claudes Texten. auto folgt der Sprache von Home Assistant (Deutsch oder Englisch, sonst Englisch), de oder en legen sie fest.
+    description: "Sprache von Board, Meldungen und Claudes Texten. auto folgt der Sprache von Home Assistant (Deutsch oder Englisch, jede andere Sprache wird Englisch, alle 15 Minuten geprüft), de oder en legen sie fest."
   allow_immediate_from_outside:
     name: Sofort-Umsetzung von außerhalb des Boards
-    description: "Aus: die Präfixe sofort:, now: und ! in der To-do-Liste und modus sofort im Ereignis hausmeister_neues_ticket legen nur einen Entwurf an. An: sie werden ohne Entwurf sofort umgesetzt. Das Board selbst ist nicht betroffen."
+    description: "Aus: die Präfixe sofort:, now: und ! in der To-do-Liste und modus sofort im Ereignis hausmeister_neues_ticket legen nur einen Entwurf an (mit Hinweis). An: sie werden ohne Entwurf sofort umgesetzt. Das Board und die Knöpfe in Meldungen sind nicht betroffen."

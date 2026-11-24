@@ -4,7 +4,7 @@ configuration:
     description: Times (HH:MM) at which the queue is processed. Claude is only started when something is queued.
   auto_draft:
     name: Draft new tickets right away
-    description: New tickets from the todo list get a draft on the next run. Drafts change nothing.
+    description: "On: new tickets from the todo list, and events without modus, get a draft on the next run. Off: they are only collected (state New). Drafts change nothing."
   max_tickets_per_run:
     name: Tickets per run
     description: Upper limit per run, so the usage quota lasts.
@@ -13,28 +13,28 @@ configuration:
     description: The Claude call is stopped afterwards and the ticket is marked as failed.
   backup_before_change:
     name: HA backup before each implementation
-    description: Partial Home Assistant backup without the database before each implementation, in addition to the file snapshots.
+    description: "Partial Home Assistant backup without the database before each implementation, in addition to the git snapshot of the configuration (which always runs). Skipped when the config folder is larger than the limit for the HA backup."
   intake_todo:
     name: Todo list for new tickets
-    description: Items of this list become tickets and are removed from the list. Leave empty to turn it off.
+    description: "Open items of this list become tickets and are removed from the list. Leave empty to turn it off. Prefixes for immediate implementation: see the last option."
   notify_service:
     name: Notification service
-    description: "Optional, e.g. notify.mobile_app_phone. Reports drafts, questions, implementations and watch alarms."
+    description: "Optional, e.g. notify.mobile_app_phone. Reports drafts, questions, implementations, errors, watch alarms and new suggestions; a mobile app gets buttons."
   max_quota_percent:
     name: Quota limit (%)
-    description: Above this utilization of the subscription (highest window reported by Claude Code) scheduled runs are skipped until the window resets. Immediate tickets still run. 0 turns it off.
+    description: "Above this utilization of the subscription (highest window reported by Claude Code) scheduled runs are skipped until the window resets, and so are immediate tickets from the todo list, events and notification buttons. Immediate tickets and Run now from the board still run. 0 turns it off."
   max_backup_gb:
     name: Limit for the HA backup (GB)
     description: If the config folder is larger (for example model files or media), no HA backup is made before an implementation, only the git snapshot of the configuration. A partial HA backup always contains the whole folder.
   inspection_day:
     name: Inspection
-    description: On this day the first run looks around (read only) and fills the Suggestions tab. off, daily or a weekday (mon to sun). The German values aus, taeglich and mo to so still work.
+    description: "On this day the run at the first configured run time looks around (read only) and fills the Suggestions tab. off, daily or a weekday (mon to sun). The German values aus, taeglich and mo to so still work."
   model:
     name: Model
     description: Optional, e.g. sonnet or opus. Empty uses the Claude Code default.
   language:
     name: Language
-    description: Language of the board, the notifications and Claude's texts. auto follows the language of Home Assistant (German or English, otherwise English), de or en set it.
+    description: "Language of the board, the notifications and Claude's texts. auto follows the language of Home Assistant (German or English, any other language gives English, checked every 15 minutes), de or en set it."
   allow_immediate_from_outside:
     name: Immediate implementation from outside the board
-    description: "Off: the prefixes sofort:, now: and ! in the todo list and mode sofort in the event hausmeister_neues_ticket only create a draft. On: they are implemented right away without a draft. The board itself is not affected."
+    description: "Off: the prefixes sofort:, now: and ! in the todo list and modus sofort in the event hausmeister_neues_ticket only create a draft (with a note). On: they are implemented right away without a draft. The board and the buttons in notifications are not affected."

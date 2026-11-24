@@ -1,3 +1,11 @@
+## 0.8.3
+
+Documentation checked against the code, `cfg-git` without credential files.
+
+- `cfg-git` also leaves `.storage/*credential*` (for example `application_credentials`) out of every diff, log and listing by pathspec and refuses these paths when they are named, like `secrets.yaml` and the auth files.
+- Documentation (README, DOCS, option descriptions, rules for Claude, help texts) checked against the code: a concrete security section with the remaining risks (implementation as root with a full shell, prompt injection, deny rules depend on Claude Code, root terminal, snapshots contain secrets), notes for updating from before 0.8, `auto_draft` also applies to events without `modus`, "Run now" is not held back by the quota limit, notification buttons are not affected by `allow_immediate_from_outside`, the inspection runs at the first configured run time, `ha-read template` and all `cfg-git` subcommands in the rules, `/data/wissen.md` instead of `WISSEN.md` in the prompts.
+- The hint on the board about `sofort:`, `now:` and `!` now says that they only skip the draft with `allow_immediate_from_outside`.
+
 ## 0.8.2
 
 No changes to file rights in the configuration of Home Assistant.

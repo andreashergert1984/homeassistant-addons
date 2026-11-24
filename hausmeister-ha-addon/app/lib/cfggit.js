@@ -1,7 +1,7 @@
 'use strict';
 // Runs cfg-git (read-only git on the snapshots of /homeassistant) for the server. Claude and the
 // terminal reach it through the local proxy (lib/proxy.js), so the draft user needs no access to
-// /data/configgit. Every argument passes lib/policy.js; secrets are excluded by pathspec.
+// /data/configgit. Every argument passes lib/policy.js; secrets and credential stores are excluded by pathspec.
 
 const { execFile, spawnSync } = require('child_process');
 const policy = require('./policy');
