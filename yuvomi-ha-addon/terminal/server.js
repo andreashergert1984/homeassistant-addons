@@ -110,12 +110,16 @@ async function opIn({ key, quantity, expires_on, location_id }) {
     });
     op = { type: 'in', created: data.id };
   }
-  if (expires_on && key.indexOf('tile:') !== 0 && store.products[key]) {
-    store.products[key].shelf_days = Math.max(0, daysFromNow(expires_on));
+  // An MHD in the past is allowed (old stock, Erstinventur) but is no shelf life
+  // for the next purchase: the remembered "Wie zuletzt" stays as it was instead
+  // of jumping to today (+0 T).
+  const shelf = expires_on ? daysFromNow(expires_on) : -1;
+  if (shelf >= 0 && key.indexOf('tile:') !== 0 && store.products[key]) {
+    store.products[key].shelf_days = shelf;
     save();
-  } else if (expires_on && key.startsWith('tile:')) {
+  } else if (shelf >= 0 && key.startsWith('tile:')) {
     const t = store.tiles.find((x) => 'tile:' + x.id === key);
-    if (t) { t.shelf_days = Math.max(0, daysFromNow(expires_on)); save(); }
+    if (t) { t.shelf_days = shelf; save(); }
   }
   const after = total(batchesOf((await pantry()).data, prod));
   return { id: remember(op), message: `+${q} ${prod.name}`, total: after };

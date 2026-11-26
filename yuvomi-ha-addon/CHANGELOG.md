@@ -1,3 +1,7 @@
+## 2.83.0.10
+
+- Ein MHD in der Vergangenheit (alte Ware, Erstinventur) wird normal gebucht und setzt "Wie zuletzt" nicht mehr auf heute zurück; gemerkt wird nur eine Haltbarkeit ab heute.
+
 ## 2.83.0.9
 
 - Unterer Rand auf Geräten ohne Kamera vergrößert, der Fully-Hinweis streifte noch die Knöpfe der Eingabeblätter.
